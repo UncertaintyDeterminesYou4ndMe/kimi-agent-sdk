@@ -81,6 +81,8 @@ type Session struct {
 	cmd    *exec.Cmd
 	codec  *jsonrpc2.Codec
 	rwlock sync.RWMutex
+	seq    uint64
+	turns  []*Turn
 	msgs   chan wire.Message
 	usrc   chan wire.RequestResponse
 	tp     transport.Transport
@@ -109,6 +111,7 @@ func wait(codec *jsonrpc2.Codec) {
 func (s *Session) RoundTrip(ctx context.Context, content wire.Content) (*Turn, error) {
 	var (
 		bg     sync.WaitGroup
+		id     = atomic.AddUint64(&s.seq, 1)
 		msgs   = make(chan wire.Message)
 		usrc   = make(chan wire.RequestResponse, 1)
 		errc1  = make(chan error, 1)
@@ -155,6 +158,15 @@ func (s *Session) RoundTrip(ctx context.Context, content wire.Content) (*Turn, e
 		for range msgs {
 		}
 		bg.Wait()
+		s.rwlock.Lock()
+		for i, turn := range s.turns {
+			if turn.id == id {
+				s.turns[i] = s.turns[len(s.turns)-1]
+				s.turns = s.turns[:len(s.turns)-1]
+				break
+			}
+		}
+		s.rwlock.Unlock()
 		select {
 		case <-s.ctx.Done():
 			if state := s.cmd.ProcessState; state.ExitCode() > 0 {
@@ -169,7 +181,11 @@ func (s *Session) RoundTrip(ctx context.Context, content wire.Content) (*Turn, e
 	}
 	select {
 	case <-resc:
-		return turnBegin(ctx, s.tp, result, msgs, usrc, exit), nil
+		turn := turnBegin(ctx, id, s.tp, result, msgs, usrc, exit)
+		s.rwlock.Lock()
+		s.turns = append(s.turns, turn)
+		s.rwlock.Unlock()
+		return turn, nil
 	case err := <-errc1:
 		return nil, exit(err)
 	case err := <-errc2:
@@ -221,6 +237,16 @@ func (r *Responder) Request(request *wire.RequestParams) (*wire.RequestResult, e
 }
 
 func (s *Session) Close() error {
+	s.rwlock.Lock()
+	cancels := make([]func() error, len(s.turns))
+	for i, turn := range s.turns {
+		cancels[i] = turn.Cancel
+	}
+	s.turns = nil
+	s.rwlock.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
 	return errors.Join(
 		s.codec.Close(),
 		s.cmd.Cancel(),

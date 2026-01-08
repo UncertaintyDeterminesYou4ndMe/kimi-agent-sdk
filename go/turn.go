@@ -15,6 +15,7 @@ var (
 
 func turnBegin(
 	ctx context.Context,
+	id uint64,
 	tp transport.Transport,
 	result *atomic.Pointer[wire.PromptResult],
 	msgs <-chan wire.Message,
@@ -25,6 +26,7 @@ func turnBegin(
 	current, stop := context.WithCancel(context.Background())
 	steps := make(chan *Step, 8)
 	turn := &Turn{
+		id:      id,
 		tp:      tp,
 		result:  result,
 		current: current,
@@ -41,6 +43,7 @@ func turnBegin(
 }
 
 type Turn struct {
+	id     uint64
 	tp     transport.Transport
 	result *atomic.Pointer[wire.PromptResult]
 

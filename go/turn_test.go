@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/mock/gomock"
+
 	"github.com/MoonshotAI/kimi-agent-sdk/go/wire"
 	"github.com/MoonshotAI/kimi-agent-sdk/go/wire/transport"
-	"go.uber.org/mock/gomock"
 )
 
 // setupTurn creates a Turn for testing with proper cleanup
@@ -34,7 +35,7 @@ func setupTurn(t *testing.T) (
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	turn := turnBegin(ctx, mockTP, result, msgs, usrc, exit)
+	turn := turnBegin(ctx, 0, mockTP, result, msgs, usrc, exit)
 
 	cleanup := func() {
 		close(msgs)
@@ -71,7 +72,7 @@ func TestTurn_Result_Finished(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	turn := turnBegin(ctx, mockTP, result, msgs, usrc, exit)
+	turn := turnBegin(ctx, 0, mockTP, result, msgs, usrc, exit)
 
 	// Update result to finished
 	result.Store(&wire.PromptResult{
@@ -129,7 +130,7 @@ func TestTurn_Cancel(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	turn := turnBegin(ctx, mockTP, result, msgs, usrc, exit)
+	turn := turnBegin(ctx, 0, mockTP, result, msgs, usrc, exit)
 
 	err := turn.Cancel()
 	if err != nil {
@@ -289,7 +290,7 @@ func TestTurn_watch_ContextCancel(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	_ = turnBegin(ctx, mockTP, result, msgs, usrc, exit)
+	_ = turnBegin(ctx, 0, mockTP, result, msgs, usrc, exit)
 
 	// Cancel the context
 	cancel()
