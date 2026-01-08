@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - "go/**"
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -28,6 +29,9 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    env:
+      KIMI_BASE_URL: ${{ secrets.KIMI_BASE_URL }}
+      KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +43,9 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install kimi-cli
-        run: uv tool install --python 3.13 kimi-cli
+        run: |
+          uv tool install --python 3.13 kimi-cli
+          kimi --print -c hi
 
       - name: Build test fixtures
         working-directory: go
@@ -47,7 +53,4 @@ jobs:
 
       - name: Run tests
         working-directory: go
-        env:
-          KIMI_BASE_URL: ${{ secrets.KIMI_BASE_URL }}
-          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
         run: go test -cover -race -count=5 ./...
