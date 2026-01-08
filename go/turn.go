@@ -26,7 +26,7 @@ func turnBegin(
 ) *Turn {
 	parent, cancel := context.WithCancel(ctx)
 	current, stop := context.WithCancel(context.Background())
-	steps := make(chan *Step, 8)
+	steps := make(chan *Step)
 	turn := &Turn{
 		id:      id,
 		tp:      tp,
@@ -100,7 +100,7 @@ func (t *Turn) traverse(incoming <-chan wire.Message, steps chan<- *Step) {
 				if outgoing != nil {
 					close(outgoing)
 				}
-				outgoing = make(chan wire.Message, 16)
+				outgoing = make(chan wire.Message)
 				select {
 				case steps <- &Step{n: x.(wire.StepBegin).N, Messages: outgoing}:
 				case <-t.current.Done():

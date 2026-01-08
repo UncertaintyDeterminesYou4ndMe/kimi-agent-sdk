@@ -113,7 +113,7 @@ func (s *Session) RoundTrip(ctx context.Context, content wire.Content) (*Turn, e
 		bg     sync.WaitGroup
 		id     = atomic.AddUint64(&s.seq, 1)
 		msgs   = make(chan wire.Message)
-		usrc   = make(chan wire.RequestResponse, 1)
+		usrc   = make(chan wire.RequestResponse)
 		errc1  = make(chan error)
 		errc2  = make(chan error)
 		resc   = make(chan struct{})
