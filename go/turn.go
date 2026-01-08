@@ -17,6 +17,7 @@ func turnBegin(
 	ctx context.Context,
 	id uint64,
 	tp transport.Transport,
+	err *atomic.Pointer[error],
 	result *atomic.Pointer[wire.PromptResult],
 	msgs <-chan wire.Message,
 	usrc chan<- wire.RequestResponse,
@@ -28,6 +29,7 @@ func turnBegin(
 	turn := &Turn{
 		id:      id,
 		tp:      tp,
+		err:     err,
 		result:  result,
 		current: current,
 		stop:    stop,
@@ -45,6 +47,7 @@ func turnBegin(
 type Turn struct {
 	id     uint64
 	tp     transport.Transport
+	err    *atomic.Pointer[error]
 	result *atomic.Pointer[wire.PromptResult]
 
 	current context.Context
@@ -133,6 +136,13 @@ func (t *Turn) traverse(incoming <-chan wire.Message, steps chan<- *Step) {
 			}
 		}
 	}
+}
+
+func (t *Turn) Err() error {
+	if err := t.err.Load(); err != nil && *err != nil {
+		return *err
+	}
+	return nil
 }
 
 func (t *Turn) Result() wire.PromptResult {

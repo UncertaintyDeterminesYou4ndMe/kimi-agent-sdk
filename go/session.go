@@ -133,6 +133,10 @@ func (s *Session) RoundTrip(ctx context.Context, content wire.Content) (*Turn, e
 		}
 		resc <- struct{}{}
 	})
+	var (
+		ok = make(chan struct{})
+		ep atomic.Pointer[error]
+	)
 	bg.Go(func() {
 		cleanup := func() {
 			wait(s.codec)
@@ -149,7 +153,12 @@ func (s *Session) RoundTrip(ctx context.Context, content wire.Content) (*Turn, e
 			UserInput: content,
 		})
 		if err != nil {
-			errc2 <- err
+			select {
+			case errc2 <- err:
+				close(ok)
+			case <-ok:
+				ep.Store(&err)
+			}
 			return
 		}
 		result.Store(rpcresult)
@@ -181,7 +190,8 @@ func (s *Session) RoundTrip(ctx context.Context, content wire.Content) (*Turn, e
 	}
 	select {
 	case <-resc:
-		turn := turnBegin(ctx, id, s.tp, result, msgs, usrc, exit)
+		close(ok)
+		turn := turnBegin(ctx, id, s.tp, &ep, result, msgs, usrc, exit)
 		s.rwlock.Lock()
 		s.turns = append(s.turns, turn)
 		s.rwlock.Unlock()
