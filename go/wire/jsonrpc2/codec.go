@@ -57,10 +57,17 @@ func JSONIDGenerator(generator Generator[string]) CodecOption {
 	}
 }
 
+func ShutdownTimeout(timeout time.Duration) CodecOption {
+	return func(codec *Codec) {
+		codec.shutdownTimeout = timeout
+	}
+}
+
 type Codec struct {
 	clientMethodRenamer Renamer
 	serverMethodRenamer Renamer
 	jsonidGenerator     Generator[string]
+	shutdownTimeout     time.Duration
 
 	donectx context.Context
 	cancel  context.CancelFunc
@@ -303,7 +310,12 @@ func (c *Codec) Close() error {
 	defer c.wg.Wait()
 	c.cancel()
 	c.err.CompareAndSwap(nil, &wraperror{io.EOF})
-	timer := time.NewTimer(15 * time.Second)
+	timeout := c.shutdownTimeout
+	if timeout == 0 {
+		timeout = 15 * time.Second
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 gracefulshutdown:
 	for {
 		select {

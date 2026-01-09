@@ -432,3 +432,42 @@ func TestCodec_Send_EncodeError_SetsErrAndSubsequentCallsFail(t *testing.T) {
 	delete(codec.clireqids, "1")
 	codec.clilock.Unlock()
 }
+
+func TestCodec_ShutdownTimeout_CustomValue(t *testing.T) {
+	c1, c2 := net.Pipe()
+	defer c2.Close()
+
+	customTimeout := 100 * time.Millisecond
+	codec := NewCodec(c1, ShutdownTimeout(customTimeout))
+
+	if codec.shutdownTimeout != customTimeout {
+		t.Fatalf("expected shutdownTimeout=%v, got %v", customTimeout, codec.shutdownTimeout)
+	}
+
+	start := time.Now()
+	_ = codec.Close()
+	elapsed := time.Since(start)
+
+	if elapsed > 200*time.Millisecond {
+		t.Fatalf("Close took too long: %v, expected < 200ms with custom timeout", elapsed)
+	}
+}
+
+func TestCodec_ShutdownTimeout_DefaultValue(t *testing.T) {
+	c1, c2 := net.Pipe()
+	defer c2.Close()
+
+	codec := NewCodec(c1)
+
+	if codec.shutdownTimeout != 0 {
+		t.Fatalf("expected shutdownTimeout=0 (unset), got %v", codec.shutdownTimeout)
+	}
+
+	start := time.Now()
+	_ = codec.Close()
+	elapsed := time.Since(start)
+
+	if elapsed > 200*time.Millisecond {
+		t.Fatalf("Close took too long: %v, expected quick close with no pending requests", elapsed)
+	}
+}
