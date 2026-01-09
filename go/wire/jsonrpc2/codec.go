@@ -88,6 +88,21 @@ type Codec struct {
 	inress chan Response
 }
 
+func (c *Codec) loadOrFallbackErr(fallback error) error {
+	if werr := c.err.Load(); werr != nil {
+		if err := werr.(error); errors.Is(err, io.EOF) {
+			return io.EOF
+		} else if errors.Is(err, io.ErrUnexpectedEOF) {
+			return io.ErrUnexpectedEOF
+		} else if we := new(wraperror); errors.As(err, &we) {
+			return we.Unwrap()
+		} else {
+			return err
+		}
+	}
+	return fallback
+}
+
 func (c *Codec) send() {
 	for payload := range c.outpls {
 		if err := c.enc.Encode(payload); err != nil {
@@ -126,21 +141,14 @@ func (c *Codec) recv() {
 }
 
 func (c *Codec) ReadRequestHeader(r *rpc.Request) error {
-	if werr := c.err.Load(); werr != nil {
-		if err := werr.(error); errors.Is(err, io.EOF) {
-			return io.EOF
-		} else {
-			return err
-		}
-	}
 	var ok bool
 	select {
 	case c.thisreq, ok = <-c.inreqs:
 		if !ok {
-			return io.EOF
+			return c.loadOrFallbackErr(io.EOF)
 		}
 	case <-c.donectx.Done():
-		return io.EOF
+		return c.loadOrFallbackErr(io.EOF)
 	}
 	if renamer := c.serverMethodRenamer; renamer != nil {
 		r.ServiceMethod = renamer.Rename(c.thisreq.GetMethod())
@@ -156,17 +164,13 @@ func (c *Codec) ReadRequestHeader(r *rpc.Request) error {
 }
 
 func (c *Codec) ReadRequestBody(x any) error {
-	if werr := c.err.Load(); werr != nil {
-		if err := werr.(error); errors.Is(err, io.EOF) {
-			return io.EOF
-		} else {
-			return err
-		}
-	}
 	if x == nil {
 		return nil
 	}
-	return json.Unmarshal(c.thisreq.GetParams(), x)
+	if err := json.Unmarshal(c.thisreq.GetParams(), x); err != nil {
+		return c.loadOrFallbackErr(err)
+	}
+	return nil
 }
 
 func (c *Codec) WriteResponse(r *rpc.Response, x any) error {
@@ -175,13 +179,6 @@ func (c *Codec) WriteResponse(r *rpc.Response, x any) error {
 		delete(c.srvreqids, r.Seq)
 		c.srvlock.Unlock()
 	}()
-	if werr := c.err.Load(); werr != nil {
-		if err := werr.(error); errors.Is(err, io.EOF) {
-			return io.EOF
-		} else {
-			return err
-		}
-	}
 	c.srvlock.Lock()
 	reqid := c.srvreqids[r.Seq]
 	c.srvlock.Unlock()
@@ -189,7 +186,7 @@ func (c *Codec) WriteResponse(r *rpc.Response, x any) error {
 		if r.Error == "" {
 			result, err := json.Marshal(x)
 			if err != nil {
-				return err
+				return c.loadOrFallbackErr(err)
 			}
 			select {
 			case c.outpls <- &Payload{
@@ -198,7 +195,7 @@ func (c *Codec) WriteResponse(r *rpc.Response, x any) error {
 				Result:  result,
 			}:
 			case <-c.donectx.Done():
-				return io.EOF
+				return c.loadOrFallbackErr(io.EOF)
 			}
 		} else {
 			errmsg := json.RawMessage(r.Error)
@@ -212,7 +209,7 @@ func (c *Codec) WriteResponse(r *rpc.Response, x any) error {
 				Error:   errmsg,
 			}:
 			case <-c.donectx.Done():
-				return io.EOF
+				return c.loadOrFallbackErr(io.EOF)
 			}
 		}
 	}
@@ -220,16 +217,9 @@ func (c *Codec) WriteResponse(r *rpc.Response, x any) error {
 }
 
 func (c *Codec) WriteRequest(r *rpc.Request, x any) error {
-	if werr := c.err.Load(); werr != nil {
-		if err := werr.(error); errors.Is(err, io.EOF) {
-			return io.EOF
-		} else {
-			return err
-		}
-	}
 	params, err := json.Marshal(x)
 	if err != nil {
-		return err
+		return c.loadOrFallbackErr(err)
 	}
 	var reqid string
 	if generator := c.jsonidGenerator; generator != nil {
@@ -255,27 +245,20 @@ func (c *Codec) WriteRequest(r *rpc.Request, x any) error {
 		Params:  params,
 	}:
 	case <-c.donectx.Done():
-		return io.EOF
+		return c.loadOrFallbackErr(io.EOF)
 	}
 	return nil
 }
 
 func (c *Codec) ReadResponseHeader(r *rpc.Response) error {
-	if werr := c.err.Load(); werr != nil {
-		if err := werr.(error); errors.Is(err, io.EOF) {
-			return io.EOF
-		} else {
-			return err
-		}
-	}
 	var ok bool
 	select {
 	case c.thisres, ok = <-c.inress:
 		if !ok {
-			return io.EOF
+			return c.loadOrFallbackErr(io.EOF)
 		}
 	case <-c.donectx.Done():
-		return io.EOF
+		return c.loadOrFallbackErr(io.EOF)
 	}
 	id := c.thisres.GetID()
 	c.clilock.Lock()
@@ -291,17 +274,13 @@ func (c *Codec) ReadResponseHeader(r *rpc.Response) error {
 }
 
 func (c *Codec) ReadResponseBody(x any) error {
-	if werr := c.err.Load(); werr != nil {
-		if err := werr.(error); errors.Is(err, io.EOF) {
-			return io.EOF
-		} else {
-			return err
-		}
-	}
 	if x == nil {
 		return nil
 	}
-	return json.Unmarshal(c.thisres.GetResult(), x)
+	if err := json.Unmarshal(c.thisres.GetResult(), x); err != nil {
+		return c.loadOrFallbackErr(err)
+	}
+	return nil
 }
 
 func (c *Codec) PendingServerRequests() int {

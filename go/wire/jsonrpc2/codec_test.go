@@ -16,7 +16,7 @@ import (
 	"golang.org/x/text/language"
 )
 
-const testServiceName = "Wire"
+const testServiceName = "Transport"
 
 func testClientRenamer(serviceMethod string) string {
 	dot := strings.LastIndex(serviceMethod, ".")
@@ -79,7 +79,7 @@ func startRPCServer(t *testing.T, codec *Codec, rcvr any) <-chan struct{} {
 	t.Helper()
 
 	srv := rpc.NewServer()
-	if err := srv.RegisterName("Wire", rcvr); err != nil {
+	if err := srv.RegisterName(testServiceName, rcvr); err != nil {
 		t.Fatalf("RegisterName: %v", err)
 	}
 
@@ -156,7 +156,7 @@ func TestCodec_RPC_RoundTrip_Success(t *testing.T) {
 	client := newRPCClient(t, TestWireService{})
 
 	var reply TestReply
-	if err := client.Call("Wire.Prompt", &TestArgs{UserInput: "hello"}, &reply); err != nil {
+	if err := client.Call("Transport.Prompt", &TestArgs{UserInput: "hello"}, &reply); err != nil {
 		t.Fatalf("Call: %v", err)
 	}
 	if reply.Echo != "hello" {
@@ -167,7 +167,7 @@ func TestCodec_RPC_RoundTrip_Success(t *testing.T) {
 func TestCodec_RPC_Error_PlainStringIsJSONEncodedString(t *testing.T) {
 	client := newRPCClient(t, TestWireService{})
 
-	err := client.Call("Wire.Failplain", &struct{}{}, &struct{}{})
+	err := client.Call("Transport.Failplain", &struct{}{}, &struct{}{})
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -179,7 +179,7 @@ func TestCodec_RPC_Error_PlainStringIsJSONEncodedString(t *testing.T) {
 func TestCodec_RPC_Error_JSONObject_PreservedAndParseable(t *testing.T) {
 	client := newRPCClient(t, TestWireService{})
 
-	err := client.Call("Wire.Failjson", &struct{}{}, &struct{}{})
+	err := client.Call("Transport.Failjson", &struct{}{}, &struct{}{})
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -241,24 +241,8 @@ func TestCodec_EOF_AfterClose_ReturnsBareEOF(t *testing.T) {
 	if err := codec.ReadRequestHeader(&rpc.Request{}); err != io.EOF {
 		t.Fatalf("ReadRequestHeader: got %T %v want io.EOF", err, err)
 	}
-	if err := codec.ReadRequestBody(&struct{}{}); err != io.EOF {
-		t.Fatalf("ReadRequestBody: got %T %v want io.EOF", err, err)
-	}
-	if err := codec.WriteRequest(&rpc.Request{ServiceMethod: "Wire.Prompt", Seq: 1}, &TestArgs{UserInput: "x"}); err != io.EOF {
-		t.Fatalf("WriteRequest: got %T %v want io.EOF", err, err)
-	}
 	if err := codec.ReadResponseHeader(&rpc.Response{}); err != io.EOF {
 		t.Fatalf("ReadResponseHeader: got %T %v want io.EOF", err, err)
-	}
-	if err := codec.ReadResponseBody(&struct{}{}); err != io.EOF {
-		t.Fatalf("ReadResponseBody: got %T %v want io.EOF", err, err)
-	}
-
-	codec.srvlock.Lock()
-	codec.srvreqids[2] = "2"
-	codec.srvlock.Unlock()
-	if err := codec.WriteResponse(&rpc.Response{Seq: 2}, &struct{}{}); err != io.EOF {
-		t.Fatalf("WriteResponse: got %T %v want io.EOF", err, err)
 	}
 }
 
@@ -290,7 +274,7 @@ func TestCodec_ReadResponseHeader_KnownID_CleansMaps(t *testing.T) {
 	defer c2.Close()
 
 	codec.clilock.Lock()
-	codec.reqmeth["rid"] = "Wire.Prompt"
+	codec.reqmeth["rid"] = "Transport.Prompt"
 	codec.clireqids["rid"] = 42
 	codec.clilock.Unlock()
 
@@ -300,7 +284,7 @@ func TestCodec_ReadResponseHeader_KnownID_CleansMaps(t *testing.T) {
 	if err := codec.ReadResponseHeader(&r); err != nil {
 		t.Fatalf("ReadResponseHeader: %v", err)
 	}
-	if r.ServiceMethod != "Wire.Prompt" {
+	if r.ServiceMethod != "Transport.Prompt" {
 		t.Fatalf("unexpected ServiceMethod: %q", r.ServiceMethod)
 	}
 	if r.Seq != 42 {
@@ -345,7 +329,7 @@ func TestCodec_DecodeError_InvalidJSON_PropagatesNonEOF(t *testing.T) {
 func TestCodec_RPC_UnknownMethod_DiscardBodyAndError(t *testing.T) {
 	client := newRPCClient(t, TestWireService{})
 
-	err := client.Call("Wire.Unknown", &TestArgs{UserInput: "x"}, &TestReply{})
+	err := client.Call("Transport.Unknown", &TestArgs{UserInput: "x"}, &TestReply{})
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -372,7 +356,7 @@ func TestCodec_WriteRequest_MarshalError_ReturnsUnsupportedTypeError(t *testing.
 	defer c2.Close()
 	defer codec.Close()
 
-	err := codec.WriteRequest(&rpc.Request{ServiceMethod: "Wire.Prompt", Seq: 1}, func() {})
+	err := codec.WriteRequest(&rpc.Request{ServiceMethod: "Transport.Prompt", Seq: 1}, func() {})
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -423,7 +407,7 @@ func TestCodec_Send_EncodeError_SetsErrAndSubsequentCallsFail(t *testing.T) {
 	defer codec.Close()
 	defer pw.Close()
 
-	err := codec.WriteRequest(&rpc.Request{ServiceMethod: "Wire.Prompt", Seq: 1}, &TestArgs{UserInput: "x"})
+	err := codec.WriteRequest(&rpc.Request{ServiceMethod: "Transport.Prompt", Seq: 1}, &TestArgs{UserInput: "x"})
 	if err != nil {
 		t.Fatalf("WriteRequest: %v", err)
 	}
@@ -432,7 +416,7 @@ func TestCodec_Send_EncodeError_SetsErrAndSubsequentCallsFail(t *testing.T) {
 		return codec.err.Load() != nil
 	})
 
-	err = codec.WriteRequest(&rpc.Request{ServiceMethod: "Wire.Prompt", Seq: 2}, &TestArgs{UserInput: "y"})
+	err = codec.WriteRequest(&rpc.Request{ServiceMethod: "Transport.Prompt", Seq: 2}, &TestArgs{UserInput: "y"})
 	if err == nil {
 		t.Fatalf("expected error")
 	}
