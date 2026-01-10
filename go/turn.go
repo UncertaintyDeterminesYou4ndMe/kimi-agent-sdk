@@ -70,7 +70,7 @@ func (t *Turn) watch(parent context.Context) {
 		return
 	case <-parent.Done():
 	}
-	t.tp.Cancel(&wire.CancelParams{})
+	go t.tp.Cancel(&wire.CancelParams{})
 }
 
 func (t *Turn) traverse(incoming <-chan wire.Message, steps chan<- *Step) {
