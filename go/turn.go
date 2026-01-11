@@ -18,39 +18,39 @@ func turnBegin(
 	ctx context.Context,
 	id uint64,
 	tp transport.Transport,
-	err *atomic.Pointer[error],
-	result *atomic.Pointer[wire.PromptResult],
-	msgs <-chan wire.Message,
-	usrc chan<- wire.RequestResponse,
+	errorPointer *atomic.Pointer[error],
+	resultPointer *atomic.Pointer[wire.PromptResult],
+	wireMessageChan <-chan wire.Message,
+	wireRequestResponseChan chan<- wire.RequestResponse,
 	exit func(error) error,
 ) *Turn {
 	parent, cancel := context.WithCancel(ctx)
 	current, stop := context.WithCancel(context.Background())
-	result.CompareAndSwap(nil, &wire.PromptResult{Status: wire.PromptResultStatusPending})
+	resultPointer.CompareAndSwap(nil, &wire.PromptResult{Status: wire.PromptResultStatusPending})
 	steps := make(chan *Step)
 	turn := &Turn{
-		id:      id,
-		tp:      tp,
-		err:     err,
-		result:  result,
-		current: current,
-		stop:    stop,
-		cancel:  cancel,
-		exit:    exit,
-		usrc:    usrc,
-		Steps:   steps,
+		id:                      id,
+		tp:                      tp,
+		errorPointer:            errorPointer,
+		resultPointer:           resultPointer,
+		current:                 current,
+		stop:                    stop,
+		cancel:                  cancel,
+		exit:                    exit,
+		wireRequestResponseChan: wireRequestResponseChan,
+		Steps:                   steps,
 	}
 	turn.usage.Store(&Usage{})
-	go turn.traverse(msgs, steps)
+	go turn.traverse(wireMessageChan, steps)
 	go turn.watch(parent)
 	return turn
 }
 
 type Turn struct {
-	id     uint64
-	tp     transport.Transport
-	err    *atomic.Pointer[error]
-	result *atomic.Pointer[wire.PromptResult]
+	id            uint64
+	tp            transport.Transport
+	errorPointer  *atomic.Pointer[error]
+	resultPointer *atomic.Pointer[wire.PromptResult]
 
 	current context.Context
 	stop    context.CancelFunc
@@ -60,7 +60,7 @@ type Turn struct {
 	Steps <-chan *Step
 	usage atomic.Pointer[Usage]
 
-	usrc chan<- wire.RequestResponse
+	wireRequestResponseChan chan<- wire.RequestResponse
 }
 
 func (t *Turn) watch(parent context.Context) {
@@ -75,7 +75,7 @@ func (t *Turn) watch(parent context.Context) {
 
 func (t *Turn) traverse(incoming <-chan wire.Message, steps chan<- *Step) {
 	defer t.Cancel()
-	defer close(t.usrc)
+	defer close(t.wireRequestResponseChan)
 	defer close(steps)
 	var outgoing chan wire.Message
 	defer func() {
@@ -89,7 +89,7 @@ func (t *Turn) traverse(incoming <-chan wire.Message, steps chan<- *Step) {
 			return
 		}
 		if _, is := msg.(wire.TurnBegin); !is {
-			t.err.Store(&ErrTurnNotFound)
+			t.errorPointer.Store(&ErrTurnNotFound)
 			return
 		}
 	case <-t.current.Done():
@@ -159,14 +159,14 @@ func (t *Turn) ID() uint64 {
 }
 
 func (t *Turn) Err() error {
-	if err := t.err.Load(); err != nil && *err != nil {
+	if err := t.errorPointer.Load(); err != nil && *err != nil {
 		return *err
 	}
 	return nil
 }
 
 func (t *Turn) Result() wire.PromptResult {
-	return *t.result.Load()
+	return *t.resultPointer.Load()
 }
 
 func (t *Turn) Usage() *Usage {
