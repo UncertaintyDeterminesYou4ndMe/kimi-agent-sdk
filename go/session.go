@@ -184,11 +184,11 @@ func roundtrip[T any, R any, I interface {
 			select {
 			case rpcErrorChan <- err:
 				close(deliveredSignal)
+				close(rpcErrorSignal)
 			case <-deliveredSignal:
 				errorPointer.Store(&err)
 			case <-ctx.Done():
 			}
-			close(rpcErrorSignal)
 			return
 		}
 		select {
