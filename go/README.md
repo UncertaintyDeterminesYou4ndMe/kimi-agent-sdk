@@ -37,7 +37,7 @@ func main() {
     }
     defer session.Close()
 
-    turn, err := session.Prompt(context.Background(), wire.NewStringUserInput("Hello!"))
+    turn, err := session.Prompt(context.Background(), wire.NewStringContent("Hello!"))
     if err != nil {
         panic(err)
     }
@@ -80,6 +80,77 @@ for step := range turn.Steps {
     }
 }
 ```
+
+## External Tools
+
+You can register external tools that the model can call during a session. Use `CreateTool` to create a tool from a Go function, and `WithTools` to register them.
+
+### Defining a Tool
+
+```go
+// Define argument struct - JSON schema is generated automatically
+type WeatherArgs struct {
+    Location string `json:"location" description:"City name"`
+    Unit     string `json:"unit,omitempty" description:"Temperature unit (celsius or fahrenheit)"`
+}
+
+// Define result type - can be string, fmt.Stringer, or any JSON-serializable type
+type WeatherResult struct {
+    Temperature float64 `json:"temperature"`
+    Condition   string  `json:"condition"`
+}
+
+// Create the tool function
+func getWeather(args WeatherArgs) (WeatherResult, error) {
+    // Your implementation here
+    return WeatherResult{Temperature: 22.0, Condition: "Sunny"}, nil
+}
+```
+
+### Registering Tools
+
+```go
+tool, err := kimi.CreateTool(getWeather,
+    kimi.WithName("get_weather"),
+    kimi.WithDescription("Get current weather for a location"),
+)
+if err != nil {
+    panic(err)
+}
+
+session, err := kimi.NewSession(
+    kimi.WithTools(tool),
+    // ... other options
+)
+```
+
+### Tool Options
+
+- `WithName(name)` - Set tool name (defaults to function name)
+- `WithDescription(desc)` - Set tool description
+- `WithFieldDescription(field, desc)` - Set description for a struct field (alternative to `description` tag)
+
+### JSON Schema Generation
+
+The SDK automatically generates JSON schema from the argument struct:
+
+- Struct fields become object properties
+- Fields with `omitempty` or `omitzero` tag are optional
+- Pointer fields are always optional
+- Use `description` tag or `WithFieldDescription` to document fields
+
+### How It Works
+
+When the model calls your tool, the SDK automatically:
+1. Receives `ExternalToolCallRequest` from the CLI
+2. Parses arguments and calls your function
+3. Converts the result to string:
+   - `string` → returned directly
+   - `fmt.Stringer` → calls `.String()`
+   - Other types → JSON serialized
+4. Sends the result back via `ToolResult`
+
+You don't need to handle `ExternalToolCallRequest` manually - just consume messages as usual.
 
 ## Important Notes
 
