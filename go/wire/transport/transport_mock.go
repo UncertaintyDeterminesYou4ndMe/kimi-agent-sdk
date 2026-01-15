@@ -70,19 +70,19 @@ func (mr *MockTransportMockRecorder) Event(event any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Event", reflect.TypeOf((*MockTransport)(nil).Event), event)
 }
 
-// Init mocks base method.
-func (m *MockTransport) Init(params *wire.InitParams) (*wire.InitResult, error) {
+// Initialize mocks base method.
+func (m *MockTransport) Initialize(params *wire.InitializeParams) (*wire.InitializeResult, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Init", params)
-	ret0, _ := ret[0].(*wire.InitResult)
+	ret := m.ctrl.Call(m, "Initialize", params)
+	ret0, _ := ret[0].(*wire.InitializeResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Init indicates an expected call of Init.
-func (mr *MockTransportMockRecorder) Init(params any) *gomock.Call {
+// Initialize indicates an expected call of Initialize.
+func (mr *MockTransportMockRecorder) Initialize(params any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Init", reflect.TypeOf((*MockTransport)(nil).Init), params)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Initialize", reflect.TypeOf((*MockTransport)(nil).Initialize), params)
 }
 
 // Prompt mocks base method.
@@ -101,10 +101,10 @@ func (mr *MockTransportMockRecorder) Prompt(params any) *gomock.Call {
 }
 
 // Request mocks base method.
-func (m *MockTransport) Request(request *wire.RequestParams) (*wire.RequestResult, error) {
+func (m *MockTransport) Request(request *wire.RequestParams) (wire.RequestResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Request", request)
-	ret0, _ := ret[0].(*wire.RequestResult)
+	ret0, _ := ret[0].(wire.RequestResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

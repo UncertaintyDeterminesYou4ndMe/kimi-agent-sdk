@@ -7,11 +7,37 @@ import (
 )
 
 type (
-	InitParams struct {
-		ExternalTools []ExternalTool `json:"external_tools"`
+	InitializeParams struct {
+		ProtocolVersion string               `json:"protocol_version"`
+		Client          Optional[ClientInfo] `json:"client,omitzero"`
+		ExternalTools   []ExternalTool       `json:"external_tools,omitempty"`
 	}
-	InitResult struct {
-		SlashCommands []string `json:"slash_commands"`
+	InitializeResult struct {
+		ProtocolVersion string                        `json:"protocol_version"`
+		Server          ServerInfo                    `json:"server"`
+		SlashCommands   []SlashCommand                `json:"slash_commands"`
+		ExternalTools   Optional[ExternalToolsResult] `json:"external_tools,omitzero"`
+	}
+	ClientInfo struct {
+		Name    string `json:"name"`
+		Version string `json:"version,omitempty"`
+	}
+	ServerInfo struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	}
+	SlashCommand struct {
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Aliases     []string `json:"aliases"`
+	}
+	ExternalToolsResult struct {
+		Accepted []string               `json:"accepted"`
+		Rejected []RejectedExternalTool `json:"rejected"`
+	}
+	RejectedExternalTool struct {
+		Name   string `json:"name"`
+		Reason string `json:"reason"`
 	}
 	PromptParams struct {
 		UserInput Content `json:"user_input"`
@@ -31,10 +57,8 @@ type (
 		Type    RequestType `json:"type"`
 		Payload Request     `json:"payload"`
 	}
-	RequestResult struct {
-		RequestID string          `json:"request_id"`
-		Response  RequestResponse `json:"response"`
-	}
+	// RequestResult is an alias for RequestResponse, used as RPC return value
+	RequestResult = RequestResponse
 )
 
 type Message interface {
@@ -54,7 +78,6 @@ func (ToolResult) message()              {}
 func (SubagentEvent) message()           {}
 func (ApprovalRequestResolved) message() {}
 func (ApprovalRequest) message()         {}
-func (ExternalToolCallRequest) message() {}
 
 type Event interface {
 	Message
@@ -136,7 +159,6 @@ func (params *EventParams) UnmarshalJSON(data []byte) (err error) {
 type Request interface {
 	Message
 	RequestType() RequestType
-	RequestID() string
 	Responder
 }
 
@@ -151,17 +173,14 @@ type Responder interface {
 type RequestType string
 
 const (
-	RequestTypeApprovalRequest         RequestType = "ApprovalRequest"
-	RequestTypeExternalToolCallRequest RequestType = "ExternalToolCallRequest"
+	RequestTypeApprovalRequest RequestType = "ApprovalRequest"
+	RequestTypeToolCall        RequestType = "ToolCall"
 )
 
-func (r ApprovalRequest) RequestType() RequestType         { return RequestTypeApprovalRequest }
-func (r ApprovalRequest) RequestID() string                { return r.ID }
-func (r ExternalToolCallRequest) RequestType() RequestType { return RequestTypeExternalToolCallRequest }
-func (r ExternalToolCallRequest) RequestID() string        { return r.ID }
+func (r ApprovalRequest) RequestType() RequestType { return RequestTypeApprovalRequest }
+func (r ToolCall) RequestType() RequestType        { return RequestTypeToolCall }
 
-func (r ApprovalRequestResponse) requestResponse()         {}
-func (r ExternalToolCallRequestResponse) requestResponse() {}
+func (ApprovalRequestResponse) requestResponse() {}
 
 func unmarshalRequest[R Request](data []byte) (Request, error) {
 	var request R
@@ -172,8 +191,8 @@ func unmarshalRequest[R Request](data []byte) (Request, error) {
 }
 
 var requestUnmarshaler = map[RequestType]func(data []byte) (Request, error){
-	RequestTypeApprovalRequest:         unmarshalRequest[ApprovalRequest],
-	RequestTypeExternalToolCallRequest: unmarshalRequest[ExternalToolCallRequest],
+	RequestTypeApprovalRequest: unmarshalRequest[ApprovalRequest],
+	RequestTypeToolCall:        unmarshalRequest[ToolCall],
 }
 
 func (params *RequestParams) UnmarshalJSON(data []byte) (err error) {
@@ -316,11 +335,18 @@ type Optional[T any] struct {
 	Valid bool
 }
 
+type ToolCallType string
+
+const (
+	ToolCallTypeFunction ToolCallType = "function"
+)
+
 type ToolCall struct {
-	Type     string                   `json:"type"`
-	ID       string                   `json:"id"`
-	Function ToolCallFunction         `json:"function"`
-	Extras   Optional[map[string]any] `json:"extras,omitzero"`
+	Responder `json:"-"`
+	Type      ToolCallType             `json:"type"`
+	ID        string                   `json:"id"`
+	Function  ToolCallFunction         `json:"function"`
+	Extras    Optional[map[string]any] `json:"extras,omitzero"`
 }
 
 type ToolCallFunction struct {
@@ -373,18 +399,14 @@ const (
 	ApprovalRequestResponseReject            ApprovalRequestResponse = "reject"
 )
 
-type ExternalToolCallRequest struct {
-	Responder  `json:"-"`
-	ID         string                   `json:"id"`
-	ToolCallID string                   `json:"tool_call_id"`
-	Type       string                   `json:"type"`
-	Function   ToolCallFunction         `json:"function"`
-	Extras     Optional[map[string]any] `json:"extras,omitzero"`
+// ApprovalResponse is the response to an ApprovalRequest
+type ApprovalResponse struct {
+	RequestID string                  `json:"request_id"`
+	Response  ApprovalRequestResponse `json:"response"`
 }
 
-type ExternalToolCallRequestResponse struct {
-	ToolResult
-}
+func (ApprovalResponse) requestResponse() {}
+func (ToolResult) requestResponse()       {}
 
 type DisplayBlockType string
 
@@ -419,11 +441,6 @@ type DisplayBlockTodoItem struct {
 }
 
 type ExternalTool struct {
-	Type     string                         `json:"type"`
-	Function Optional[ExternalToolFunction] `json:"function,omitzero"`
-}
-
-type ExternalToolFunction struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Parameters  json.RawMessage `json:"parameters"`

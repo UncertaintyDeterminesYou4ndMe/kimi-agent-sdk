@@ -6,6 +6,7 @@ import (
 	"net/rpc"
 
 	"github.com/MoonshotAI/kimi-agent-sdk/go/wire"
+	defcruntime "github.com/x5iu/defc/runtime"
 )
 
 func NewTransportClient(rpcClient *rpc.Client) Transport {
@@ -16,14 +17,14 @@ type implTransportClient struct {
 	rpcClient *rpc.Client
 }
 
-func (impl *implTransportClient) Init(params *wire.InitParams) (*wire.InitResult, error) {
-	InitRPCReply :=
-		new(wire.InitResult)
-	InitErr := impl.rpcClient.Call("Transport.Init", params, InitRPCReply)
-	if InitErr != nil {
-		return nil, InitErr
+func (impl *implTransportClient) Initialize(params *wire.InitializeParams) (*wire.InitializeResult, error) {
+	InitializeRPCReply :=
+		new(wire.InitializeResult)
+	InitializeErr := impl.rpcClient.Call("Transport.Initialize", params, InitializeRPCReply)
+	if InitializeErr != nil {
+		return nil, InitializeErr
 	}
-	return InitRPCReply, nil
+	return InitializeRPCReply, nil
 }
 
 func (impl *implTransportClient) Prompt(params *wire.PromptParams) (*wire.PromptResult, error) {
@@ -56,12 +57,11 @@ func (impl *implTransportClient) Event(event *wire.EventParams) (*wire.EventResu
 	return EventRPCReply, nil
 }
 
-func (impl *implTransportClient) Request(request *wire.RequestParams) (*wire.RequestResult, error) {
-	RequestRPCReply :=
-		new(wire.RequestResult)
-	RequestErr := impl.rpcClient.Call("Transport.Request", request, RequestRPCReply)
+func (impl *implTransportClient) Request(request *wire.RequestParams) (wire.RequestResult, error) {
+	RequestRPCReply := defcruntime.New[wire.RequestResult]()
+	RequestErr := impl.rpcClient.Call("Transport.Request", request, &RequestRPCReply)
 	if RequestErr != nil {
-		return nil, RequestErr
+		return RequestRPCReply, RequestErr
 	}
 	return RequestRPCReply, nil
 }
@@ -76,15 +76,15 @@ type TransportServer struct {
 	implTransport Transport
 }
 
-func (srv *TransportServer) Init(
-	arg *wire.InitParams,
-	reply *wire.InitResult,
+func (srv *TransportServer) Initialize(
+	arg *wire.InitializeParams,
+	reply *wire.InitializeResult,
 ) error {
-	InitRPCReply, InitErr := srv.implTransport.Init(arg)
-	if InitErr != nil {
-		return InitErr
+	InitializeRPCReply, InitializeErr := srv.implTransport.Initialize(arg)
+	if InitializeErr != nil {
+		return InitializeErr
 	}
-	*reply = *InitRPCReply
+	*reply = *InitializeRPCReply
 	return nil
 }
 
@@ -132,6 +132,6 @@ func (srv *TransportServer) Request(
 	if RequestErr != nil {
 		return RequestErr
 	}
-	*reply = *RequestRPCReply
+	*reply = RequestRPCReply
 	return nil
 }

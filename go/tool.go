@@ -105,15 +105,9 @@ func CreateTool[T any, U any](function func(T) (U, error), options ...ToolOption
 	}
 
 	def := wire.ExternalTool{
-		Type: "function",
-		Function: wire.Optional[wire.ExternalToolFunction]{
-			Valid: true,
-			Value: wire.ExternalToolFunction{
-				Name:        name,
-				Description: opt.description,
-				Parameters:  schemaJSON,
-			},
-		},
+		Name:        name,
+		Description: opt.description,
+		Parameters:  schemaJSON,
 	}
 
 	fn := func(args json.RawMessage) (string, error) {

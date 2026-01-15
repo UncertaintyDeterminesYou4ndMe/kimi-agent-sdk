@@ -63,20 +63,31 @@ func NewSession(options ...Option) (*Session, error) {
 			return tpname + "." + cases.Title(language.English).String(method)
 		})),
 	)
-	tp := transport.NewTransportClient(rpc.NewClientWithCodec(codec))
 	var toolDefs []wire.ExternalTool
 	for _, tool := range opt.tools {
 		toolDefs = append(toolDefs, tool.def)
 	}
-	if _, err = tp.Init(&wire.InitParams{ExternalTools: toolDefs}); err != nil {
+	tp := transport.NewTransportClient(rpc.NewClientWithCodec(codec))
+	initResult, err := tp.Initialize(&wire.InitializeParams{
+		ProtocolVersion: "2",
+		ExternalTools:   toolDefs,
+	})
+	if err != nil {
 		cancel()
 		return nil, err
 	}
+	if initResult.ExternalTools.Valid && len(initResult.ExternalTools.Value.Rejected) > 0 {
+		cancel()
+		return nil, fmt.Errorf("%q tool is rejected: %s",
+			initResult.ExternalTools.Value.Rejected[0].Name,
+			initResult.ExternalTools.Value.Rejected[0].Reason)
+	}
 	session := &Session{
-		ctx:   ctx,
-		cmd:   cmd,
-		codec: codec,
-		tp:    tp,
+		ctx:           ctx,
+		cmd:           cmd,
+		codec:         codec,
+		tp:            tp,
+		SlashCommands: initResult.SlashCommands,
 	}
 	responder := transport.NewTransportServer(&Responder{
 		rwlock:                  &session.rwlock,
@@ -107,6 +118,8 @@ type Session struct {
 	wireMessageBridge       chan wire.Message
 	wireRequestResponseChan chan wire.RequestResponse
 	tp                      transport.Transport
+
+	SlashCommands []wire.SlashCommand
 }
 
 func (s *Session) serve(responder *transport.TransportServer) {
@@ -279,7 +292,7 @@ func (r *Responder) Event(event *wire.EventParams) (*wire.EventResult, error) {
 	return &wire.EventResult{}, nil
 }
 
-func (r *Responder) Request(request *wire.RequestParams) (*wire.RequestResult, error) {
+func (r *Responder) Request(request *wire.RequestParams) (wire.RequestResult, error) {
 	r.pending.Add(1)
 	defer r.pending.Add(-1)
 	r.rwlock.RLock()
@@ -293,19 +306,20 @@ func (r *Responder) Request(request *wire.RequestParams) (*wire.RequestResult, e
 	switch req := request.Payload.(type) {
 	case wire.ApprovalRequest:
 		req.Responder = ResponderFunc(func(rr wire.RequestResponse) error {
+			if _, ok := rr.(wire.ApprovalRequestResponse); !ok {
+				return fmt.Errorf("invalid approval request response type: %T", rr)
+			}
 			*r.wireRequestResponseChan <- rr
 			return nil
 		})
 		*r.wireMessageBridge <- req
-		return &wire.RequestResult{
+		return &wire.ApprovalResponse{
 			RequestID: req.ID,
-			Response:  <-*r.wireRequestResponseChan,
+			Response:  (<-*r.wireRequestResponseChan).(wire.ApprovalRequestResponse),
 		}, nil
-	case wire.ExternalToolCallRequest:
+	case wire.ToolCall:
 		for _, tool := range r.tools {
-			if tool.def.Type == req.Type &&
-				tool.def.Function.Valid && tool.def.Function.Value.Name == req.Function.Name &&
-				req.Function.Arguments.Valid {
+			if req.Function.Name == tool.def.Name && req.Function.Arguments.Valid {
 				toolResult, err := tool.call(json.RawMessage(req.Function.Arguments.Value))
 				var output wire.Content
 				if err != nil {
@@ -313,23 +327,18 @@ func (r *Responder) Request(request *wire.RequestParams) (*wire.RequestResult, e
 				} else {
 					output = wire.NewStringContent(toolResult)
 				}
-				return &wire.RequestResult{
-					RequestID: req.ID,
-					Response: wire.ExternalToolCallRequestResponse{
-						ToolResult: wire.ToolResult{
-							ToolCallID: req.ToolCallID,
-							ReturnValue: wire.ToolResultReturnValue{
-								IsError: err != nil,
-								Output:  output,
-							},
-						},
+				return &wire.ToolResult{
+					ToolCallID: req.ID,
+					ReturnValue: wire.ToolResultReturnValue{
+						IsError: err != nil,
+						Output:  output,
 					},
 				}, nil
 			}
 		}
 		return nil, jsonrpc2.Error{
 			Code:    jsonrpc2.ErrorCodeInvalidParams,
-			Message: fmt.Sprintf("%s tool not found: %s", req.Type, req.Function.Name),
+			Message: fmt.Sprintf("tool not found: %s", req.Function.Name),
 		}
 	default:
 		return nil, jsonrpc2.Error{

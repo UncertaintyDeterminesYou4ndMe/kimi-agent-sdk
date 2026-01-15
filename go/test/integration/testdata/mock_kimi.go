@@ -10,7 +10,8 @@
 //   deadlock - sends ApprovalRequest then immediately completes prompt
 //   flood - sends many events rapidly
 //   prompt_error - sends TurnBegin then returns a JSONRPC error
-//   tool_call - sends ExternalToolCallRequest and waits for response
+//   tool_call - sends ToolCall request and waits for response
+//   tool_rejected - returns rejected external tools in initialize response
 
 package main
 
@@ -68,8 +69,8 @@ func main() {
 		}
 
 		switch req.Method {
-		case "init":
-			handleInit(encoder, req.ID)
+		case "initialize":
+			handleInitialize(encoder, req.ID)
 		case "prompt":
 			switch mode {
 			case "deadlock":
@@ -89,11 +90,29 @@ func main() {
 	}
 }
 
-func handleInit(encoder *json.Encoder, reqID string) {
+func handleInitialize(encoder *json.Encoder, reqID string) {
+	var result json.RawMessage
+	if mode == "tool_rejected" {
+		result = json.RawMessage(`{
+			"protocol_version": "2",
+			"server": {"name": "mock_kimi", "version": "0.0.1"},
+			"slash_commands": [],
+			"external_tools": {
+				"accepted": [],
+				"rejected": [{"name": "test_tool", "reason": "conflicts with builtin tool"}]
+			}
+		}`)
+	} else {
+		result = json.RawMessage(`{
+			"protocol_version": "2",
+			"server": {"name": "mock_kimi", "version": "0.0.1"},
+			"slash_commands": []
+		}`)
+	}
 	encoder.Encode(Payload{
 		Version: "2.0",
 		ID:      reqID,
-		Result:  json.RawMessage(`{}`),
+		Result:  result,
 	})
 }
 
@@ -252,7 +271,7 @@ func handlePromptError(encoder *json.Encoder, reqID string) {
 	})
 }
 
-// handlePromptToolCall sends an ExternalToolCallRequest and waits for response.
+// handlePromptToolCall sends a ToolCall request and waits for response.
 // This tests whether WithTools correctly registers tools and handles tool calls.
 func handlePromptToolCall(encoder *json.Encoder, scanner *bufio.Scanner, reqID string) {
 	// Send TurnBegin event
@@ -265,19 +284,18 @@ func handlePromptToolCall(encoder *json.Encoder, scanner *bufio.Scanner, reqID s
 		"n": 1,
 	})
 
-	// Send ExternalToolCallRequest
+	// Send ToolCall request
 	toolReqID := fmt.Sprintf("req-%d", requestID.Add(1))
 	payloadJSON, _ := json.Marshal(map[string]any{
-		"id":           "tool-req-1",
-		"tool_call_id": "call-123",
-		"type":         "function",
+		"type": "function",
+		"id":   "call-123",
 		"function": map[string]any{
 			"name":      "test_tool",
 			"arguments": `{"input":"hello"}`,
 		},
 	})
 	paramsJSON, _ := json.Marshal(map[string]any{
-		"type":    "ExternalToolCallRequest",
+		"type":    "ToolCall",
 		"payload": json.RawMessage(payloadJSON),
 	})
 	encoder.Encode(Payload{

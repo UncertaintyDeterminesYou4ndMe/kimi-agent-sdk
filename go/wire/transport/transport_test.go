@@ -115,7 +115,7 @@ func TestTransportServer_Request(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockImpl := NewMockTransport(ctrl)
-	mockImpl.EXPECT().Request(gomock.Any()).Return(&wire.RequestResult{
+	mockImpl.EXPECT().Request(gomock.Any()).Return(&wire.ApprovalResponse{
 		RequestID: "req-123",
 		Response:  wire.ApprovalRequestResponseApprove,
 	}, nil)
@@ -132,17 +132,21 @@ func TestTransportServer_Request(t *testing.T) {
 			Description: "Run command",
 		},
 	}
-	reply := &wire.RequestResult{}
+	var reply wire.RequestResult
 
-	err := srv.Request(arg, reply)
+	err := srv.Request(arg, &reply)
 	if err != nil {
 		t.Fatalf("Request: %v", err)
 	}
-	if reply.RequestID != "req-123" {
-		t.Errorf("expected request_id 'req-123', got %s", reply.RequestID)
+	ar, ok := reply.(*wire.ApprovalResponse)
+	if !ok {
+		t.Fatalf("expected *wire.ApprovalResponse, got %T", reply)
 	}
-	if reply.Response != wire.ApprovalRequestResponseApprove {
-		t.Errorf("expected response 'approve', got %s", reply.Response)
+	if ar.RequestID != "req-123" {
+		t.Errorf("expected request_id 'req-123', got %s", ar.RequestID)
+	}
+	if ar.Response != wire.ApprovalRequestResponseApprove {
+		t.Errorf("expected response 'approve', got %s", ar.Response)
 	}
 }
 

@@ -313,9 +313,6 @@ func TestRequestParams_UnmarshalJSON_ApprovalRequest(t *testing.T) {
 	if got.Payload.RequestType() != RequestTypeApprovalRequest {
 		t.Fatalf("RequestType()=%q, want %q", got.Payload.RequestType(), RequestTypeApprovalRequest)
 	}
-	if got.Payload.RequestID() != "rid" {
-		t.Fatalf("RequestID()=%q, want %q", got.Payload.RequestID(), "rid")
-	}
 }
 
 func TestRequestParams_UnmarshalJSON_UnknownTypeReturnsError(t *testing.T) {

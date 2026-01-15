@@ -36,14 +36,8 @@ func TestCreateTool_Basic(t *testing.T) {
 		t.Fatalf("CreateTool failed: %v", err)
 	}
 
-	if tool.def.Type != "function" {
-		t.Errorf("expected type=function, got %s", tool.def.Type)
-	}
-	if !tool.def.Function.Valid {
-		t.Fatal("expected Function.Valid=true")
-	}
 	// Function name includes package path with '.' replaced by '_'
-	if tool.def.Function.Value.Name == "" {
+	if tool.def.Name == "" {
 		t.Error("expected non-empty name")
 	}
 }
@@ -58,11 +52,11 @@ func TestCreateTool_WithOptions(t *testing.T) {
 		t.Fatalf("CreateTool failed: %v", err)
 	}
 
-	if tool.def.Function.Value.Name != "custom_search" {
-		t.Errorf("expected name=custom_search, got %s", tool.def.Function.Value.Name)
+	if tool.def.Name != "custom_search" {
+		t.Errorf("expected name=custom_search, got %s", tool.def.Name)
 	}
-	if tool.def.Function.Value.Description != "A custom search tool" {
-		t.Errorf("expected description='A custom search tool', got %s", tool.def.Function.Value.Description)
+	if tool.def.Description != "A custom search tool" {
+		t.Errorf("expected description='A custom search tool', got %s", tool.def.Description)
 	}
 }
 
@@ -73,7 +67,7 @@ func TestCreateTool_Schema(t *testing.T) {
 	}
 
 	var schema map[string]any
-	if err := json.Unmarshal(tool.def.Function.Value.Parameters, &schema); err != nil {
+	if err := json.Unmarshal(tool.def.Parameters, &schema); err != nil {
 		t.Fatalf("failed to unmarshal schema: %v", err)
 	}
 
@@ -167,7 +161,7 @@ func TestCreateTool_NestedStruct(t *testing.T) {
 	}
 
 	var schema map[string]any
-	if err := json.Unmarshal(tool.def.Function.Value.Parameters, &schema); err != nil {
+	if err := json.Unmarshal(tool.def.Parameters, &schema); err != nil {
 		t.Fatalf("failed to unmarshal schema: %v", err)
 	}
 
@@ -218,7 +212,7 @@ func TestCreateTool_WithFieldDescriptionOverride(t *testing.T) {
 	}
 
 	var schema map[string]any
-	if err := json.Unmarshal(tool.def.Function.Value.Parameters, &schema); err != nil {
+	if err := json.Unmarshal(tool.def.Parameters, &schema); err != nil {
 		t.Fatalf("failed to unmarshal schema: %v", err)
 	}
 
@@ -251,7 +245,7 @@ func TestCreateTool_AllTypes(t *testing.T) {
 	}
 
 	var schema map[string]any
-	if err := json.Unmarshal(tool.def.Function.Value.Parameters, &schema); err != nil {
+	if err := json.Unmarshal(tool.def.Parameters, &schema); err != nil {
 		t.Fatalf("failed to unmarshal schema: %v", err)
 	}
 

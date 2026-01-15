@@ -92,7 +92,7 @@ func TestResponder_Request_ApprovalRequest(t *testing.T) {
 
 	// Run in goroutine since it blocks waiting for response
 	done := make(chan struct{})
-	var result *wire.RequestResult
+	var result wire.RequestResult
 	var err error
 	go func() {
 		result, err = responder.Request(request)
@@ -121,11 +121,15 @@ func TestResponder_Request_ApprovalRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Request: %v", err)
 	}
-	if result.RequestID != "req-123" {
-		t.Errorf("expected request_id 'req-123', got %s", result.RequestID)
+	resp, ok := result.(*wire.ApprovalResponse)
+	if !ok {
+		t.Fatalf("expected *wire.ApprovalResponse, got %T", result)
 	}
-	if result.Response != wire.ApprovalRequestResponseApprove {
-		t.Errorf("expected response 'approve', got %s", result.Response)
+	if resp.RequestID != "req-123" {
+		t.Errorf("expected request_id 'req-123', got %s", resp.RequestID)
+	}
+	if resp.Response != wire.ApprovalRequestResponseApprove {
+		t.Errorf("expected response 'approve', got %s", resp.Response)
 	}
 }
 

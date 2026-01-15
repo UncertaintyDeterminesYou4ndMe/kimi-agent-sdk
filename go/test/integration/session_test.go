@@ -493,3 +493,38 @@ func TestIntegration_WithTools_ExternalToolCall(t *testing.T) {
 
 	t.Log("Tool call completed successfully")
 }
+
+// TestIntegration_NewSession_ToolRejected tests that NewSession returns an error
+// when the server rejects external tools in the initialize response.
+func TestIntegration_NewSession_ToolRejected(t *testing.T) {
+	mockPath := getMockKimiPath(t)
+
+	testTool, err := kimi.CreateTool(func(args testToolArgs) (testToolResult, error) {
+		return testToolResult("result"), nil
+	}, kimi.WithName("test_tool"))
+	if err != nil {
+		t.Fatalf("CreateTool: %v", err)
+	}
+
+	_, err = kimi.NewSession(
+		kimi.WithExecutable(mockPath),
+		kimi.WithTools(testTool),
+		withMode("tool_rejected"),
+	)
+	if err == nil {
+		t.Fatal("expected NewSession to return an error when tool is rejected")
+	}
+
+	// Verify error message contains expected content
+	if !strings.Contains(err.Error(), "test_tool") {
+		t.Errorf("expected error to contain tool name 'test_tool', got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "rejected") {
+		t.Errorf("expected error to contain 'rejected', got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "conflicts with builtin tool") {
+		t.Errorf("expected error to contain rejection reason, got: %v", err)
+	}
+
+	t.Logf("NewSession correctly rejected with error: %v", err)
+}
