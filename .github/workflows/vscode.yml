@@ -1,0 +1,111 @@
+name: VSCode Extension CI/CD
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'node/vscode_extension/**'
+      - '.github/workflows/vscode.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'node/vscode_extension/**'
+      - '.github/workflows/vscode.yml'
+  workflow_dispatch:
+    inputs:
+      publish_to_marketplace:
+        description: 'Publish to VSCode Marketplace'
+        required: true
+        type: boolean
+        default: false
+      publish_to_open_vsx:
+        description: 'Publish to Open VSX Registry'
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: node/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install
+        working-directory: node/vscode_extension
+
+      - name: Build
+        run: pnpm build
+        working-directory: node/vscode_extension
+
+      - name: Package
+        run: pnpm package
+        working-directory: node/vscode_extension
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension
+          path: node/vscode_extension/*.vsix
+          retention-days: 30
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && (inputs.publish_to_marketplace || inputs.publish_to_open_vsx)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: node/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install
+        working-directory: node/vscode_extension
+
+      - name: Download VSIX artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension
+          path: node/vscode_extension/
+
+      - name: Publish to VSCode Marketplace
+        if: inputs.publish_to_marketplace
+        run: |
+          npx vsce publish --no-dependencies
+        working-directory: node/vscode_extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_PAT }}
+
+      - name: Publish to Open VSX Registry
+        if: inputs.publish_to_open_vsx
+        run: |
+          npx ovsx publish
+        working-directory: node/vscode_extension
+        env:
+          OVSX_PAT: ${{ secrets.OPEN_VSX_TOKEN }}
