@@ -2,7 +2,7 @@ import { IconAlertCircle, IconRefresh } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { useChatStore } from "@/stores";
 import { cn } from "@/lib/utils";
-import type { InlineError as InlineErrorType } from "shared/types";
+import type { InlineError as InlineErrorType } from "../stores/chat.store";
 
 interface InlineErrorProps {
   error: InlineErrorType;

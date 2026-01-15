@@ -6,7 +6,7 @@ import { useApprovalStore } from "./approval.store";
 import { useSettingsStore } from "./settings.store";
 import { processEvent } from "./event-handlers";
 import type { StatusUpdate, ContentPart } from "@kimi-code/agent-sdk/schema";
-import type { UIStreamEvent, InlineError, PendingInput } from "shared/types";
+import type { UIStreamEvent } from "shared/types";
 
 const HANDSHAKE_TIMEOUT_MS = 30_000;
 
@@ -19,6 +19,11 @@ export interface UIToolCall {
 export interface UIStep {
   n: number;
   items: UIStepItem[];
+}
+
+export interface InlineError {
+  code: string;
+  message: string;
 }
 
 export type UIStepItem =
@@ -63,6 +68,12 @@ export interface DraftMediaItem {
   id: string;
   dataUri?: string;
 }
+
+export interface PendingInput {
+  content: string | ContentPart[];
+  model: string;
+}
+
 
 export interface ChatState {
   sessionId: string | null;
@@ -188,6 +199,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             draft.messages.pop();
           }
         }
+
       }),
     );
 

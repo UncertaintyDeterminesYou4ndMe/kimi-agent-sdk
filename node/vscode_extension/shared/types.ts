@@ -53,14 +53,4 @@ export interface StreamError {
   phase: ErrorPhase;
 }
 
-export interface InlineError {
-  code: string;
-  message: string;
-}
-
-export interface PendingInput {
-  content: string | ContentPart[];
-  model: string;
-}
-
 export type UIStreamEvent = { type: "session_start"; sessionId: string; model?: string } | { type: "stream_complete"; result: RunResult } | StreamError | StreamEvent;
