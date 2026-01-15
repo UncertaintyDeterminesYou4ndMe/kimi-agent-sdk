@@ -85,6 +85,8 @@ for step := range turn.Steps {
 
 You can register external tools that the model can call during a session. Use `CreateTool` to create a tool from a Go function, and `WithTools` to register them.
 
+> **Note**: External tools require `wire_protocol_version >= 2`. The SDK automatically detects the protocol version from the CLI. If your CLI version doesn't support protocol v2, external tools will be silently ignored.
+
 ### Defining a Tool
 
 ```go
@@ -142,7 +144,7 @@ The SDK automatically generates JSON schema from the argument struct:
 ### How It Works
 
 When the model calls your tool, the SDK automatically:
-1. Receives `ExternalToolCallRequest` from the CLI
+1. Receives `ToolCall` request from the CLI
 2. Parses arguments and calls your function
 3. Converts the result to string:
    - `string` → returned directly
@@ -150,7 +152,7 @@ When the model calls your tool, the SDK automatically:
    - Other types → JSON serialized
 4. Sends the result back via `ToolResult`
 
-You don't need to handle `ExternalToolCallRequest` manually - just consume messages as usual.
+You don't need to handle external tool calls manually - just consume messages as usual.
 
 ## Important Notes
 

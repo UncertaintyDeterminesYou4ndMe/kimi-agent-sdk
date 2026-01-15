@@ -44,16 +44,26 @@ type PromptParams struct {
 func main() {
 	// Parse arguments
 	hasWire := false
+	hasInfo := false
 	for i, arg := range os.Args[1:] {
 		switch arg {
 		case "--wire":
 			hasWire = true
+		case "info":
+			hasInfo = true
 		case "--mode":
 			if i+1 < len(os.Args)-1 {
 				mode = os.Args[i+2]
 			}
 		}
 	}
+
+	// Handle info command
+	if hasInfo {
+		fmt.Println(`{"wire_protocol_version": "2"}`)
+		os.Exit(0)
+	}
+
 	if !hasWire {
 		fmt.Fprintln(os.Stderr, "missing --wire flag")
 		os.Exit(1)

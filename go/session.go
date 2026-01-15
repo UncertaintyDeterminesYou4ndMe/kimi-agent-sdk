@@ -55,6 +55,12 @@ func NewSession(options ...Option) (*Session, error) {
 		cancel()
 		return nil, err
 	}
+	watch := func() {
+		cmd.Wait()
+		stdin.Close()
+		stdout.Close()
+		cancel()
+	}
 	codec := jsonrpc2.NewCodec(&stdio{stdin, stdout},
 		jsonrpc2.ClientMethodRenamer(jsonrpc2.RenamerFunc(func(method string) string {
 			return strings.ToLower(strings.TrimPrefix(method, tpname+"."))
@@ -63,46 +69,47 @@ func NewSession(options ...Option) (*Session, error) {
 			return tpname + "." + cases.Title(language.English).String(method)
 		})),
 	)
-	var toolDefs []wire.ExternalTool
-	for _, tool := range opt.tools {
-		toolDefs = append(toolDefs, tool.def)
-	}
 	tp := transport.NewTransportClient(rpc.NewClientWithCodec(codec))
-	initResult, err := tp.Initialize(&wire.InitializeParams{
-		ProtocolVersion: "2",
-		ExternalTools:   toolDefs,
-	})
-	if err != nil {
-		cancel()
-		return nil, err
-	}
-	if initResult.ExternalTools.Valid && len(initResult.ExternalTools.Value.Rejected) > 0 {
-		cancel()
-		return nil, fmt.Errorf("%q tool is rejected: %s",
-			initResult.ExternalTools.Value.Rejected[0].Name,
-			initResult.ExternalTools.Value.Rejected[0].Reason)
-	}
 	session := &Session{
-		ctx:           ctx,
-		cmd:           cmd,
-		codec:         codec,
-		tp:            tp,
-		SlashCommands: initResult.SlashCommands,
+		ctx:   ctx,
+		cmd:   cmd,
+		codec: codec,
+		tp:    tp,
 	}
-	responder := transport.NewTransportServer(&Responder{
+	responder := &Responder{
 		rwlock:                  &session.rwlock,
 		pending:                 &session.pending,
 		wireMessageBridge:       &session.wireMessageBridge,
 		wireRequestResponseChan: &session.wireRequestResponseChan,
-		tools:                   opt.tools,
-	})
-	go session.serve(responder)
-	watch := func() {
-		cmd.Wait()
-		stdin.Close()
-		stdout.Close()
-		cancel()
 	}
+	wireProtocolVersion, err := getWireProtocolVersion(opt.exec)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	if wireProtocolVersion >= "2" {
+		var toolDefs []wire.ExternalTool
+		for _, tool := range opt.tools {
+			toolDefs = append(toolDefs, tool.def)
+		}
+		initResult, err := tp.Initialize(&wire.InitializeParams{
+			ProtocolVersion: "2",
+			ExternalTools:   toolDefs,
+		})
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+		if initResult.ExternalTools.Valid && len(initResult.ExternalTools.Value.Rejected) > 0 {
+			cancel()
+			return nil, fmt.Errorf("%q tool is rejected: %s",
+				initResult.ExternalTools.Value.Rejected[0].Name,
+				initResult.ExternalTools.Value.Rejected[0].Reason)
+		}
+		session.SlashCommands = initResult.SlashCommands
+		responder.tools = opt.tools
+	}
+	go session.serve(transport.NewTransportServer(responder))
 	go watch()
 	return session, nil
 }
@@ -437,4 +444,22 @@ func (tc *turnConstructor) Construct(
 		wireRequestResponseChan,
 		exit,
 	)
+}
+
+func getWireProtocolVersion(executable string) (string, error) {
+	cmd := exec.Command(executable, "info", "--json")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	if !cmd.ProcessState.Success() {
+		return "", errors.New(string(output))
+	}
+	var info struct {
+		WireProtocolVersion string `json:"wire_protocol_version"`
+	}
+	if err := json.Unmarshal(output, &info); err != nil {
+		return "", err
+	}
+	return info.WireProtocolVersion, nil
 }
