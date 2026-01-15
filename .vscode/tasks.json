@@ -4,7 +4,7 @@
     {
       "type": "npm",
       "script": "dev",
-      "path": "vscode_extension",
+      "path": "node/vscode_extension",
       "group": "build",
       "label": "npm: dev",
       "isBackground": true,
@@ -29,7 +29,7 @@
     {
       "type": "npm",
       "script": "build",
-      "path": "vscode_extension",
+      "path": "node/vscode_extension",
       "group": "build",
       "label": "npm: build",
       "problemMatcher": ["$tsc"]
