@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/vscode_extension"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/vscode_extension/dist/**/*.js"
+      ],
+      "preLaunchTask": "npm: dev",
+      "sourceMaps": true
+    },
+    {
+      "name": "Run Extension (No Build)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/vscode_extension"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/vscode_extension/dist/**/*.js"
+      ],
+      "sourceMaps": true
+    }
+  ]
+}

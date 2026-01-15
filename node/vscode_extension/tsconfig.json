@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "module": "Node16",
+    "target": "ES2022",
+    "lib": ["es2024"],
+    "sourceMap": true,
+    "outDir": "dist",
+    "strict": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "shared/*": ["./shared/*"]
+    }
+  },
+  "include": ["src/**/*", "../agent_sdk/**/*"],
+  "exclude": ["out", "dist", "node_modules", "webview-ui"]
+}

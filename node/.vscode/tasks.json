@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "dev",
+      "path": "vscode_extension",
+      "group": "build",
+      "label": "npm: dev",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "typescript",
+        "fileLocation": "relative",
+        "pattern": {
+          "regexp": "^([^\\s].*?):(\\d+):(\\d+):\\s+(error|warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^\\[watch\\] build started",
+          "endsPattern": "^\\[watch\\] build finished"
+        }
+      }
+    },
+    {
+      "type": "npm",
+      "script": "build",
+      "path": "vscode_extension",
+      "group": "build",
+      "label": "npm: build",
+      "problemMatcher": ["$tsc"]
+    }
+  ]
+}

@@ -1,0 +1,330 @@
+import { spawn, type ChildProcess } from "node:child_process";
+import { createInterface, type Interface as ReadlineInterface } from "node:readline";
+import { RpcMessageSchema, parseEventPayload, parseRequestPayload, type StreamEvent, type RunResult, type ContentPart, type ApprovalResponse, type ParseError } from "./schema";
+import { TransportError, ProtocolError, CliError } from "./errors";
+
+// Client Options
+export interface ClientOptions {
+  sessionId: string;
+  workDir: string;
+  model?: string;
+  thinking?: boolean;
+  yoloMode?: boolean;
+  executablePath?: string;
+  environmentVariables?: Record<string, string>;
+}
+
+// Prompt Stream
+export interface PromptStream {
+  events: AsyncIterable<StreamEvent>;
+  result: Promise<RunResult>;
+}
+
+// Event Channel Helper
+export function createEventChannel<T>(): {
+  iterable: AsyncIterable<T>;
+  push: (value: T) => void;
+  finish: () => void;
+} {
+  const queue: T[] = [];
+  const resolvers: Array<(result: IteratorResult<T>) => void> = [];
+  let finished = false;
+
+  return {
+    iterable: {
+      [Symbol.asyncIterator]: () => ({
+        next: () => {
+          const queued = queue.shift();
+          if (queued !== undefined) {
+            return Promise.resolve({ done: false as const, value: queued });
+          }
+          if (finished) {
+            return Promise.resolve({ done: true as const, value: undefined });
+          }
+          return new Promise((resolve) => resolvers.push(resolve));
+        },
+      }),
+    },
+    push: (value: T) => {
+      if (finished) {
+        return;
+      }
+      const resolver = resolvers.shift();
+      if (resolver) {
+        resolver({ done: false, value });
+      } else {
+        queue.push(value);
+      }
+    },
+    finish: () => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      for (const resolver of resolvers) {
+        resolver({ done: true, value: undefined });
+      }
+      resolvers.length = 0;
+    },
+  };
+}
+
+// Protocol Client
+export class ProtocolClient {
+  private process: ChildProcess | null = null;
+  private readline: ReadlineInterface | null = null;
+  private requestId = 0;
+  private pendingRequests = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+
+  private pushEvent: ((event: StreamEvent) => void) | null = null;
+  private finishEvents: (() => void) | null = null;
+
+  get isRunning(): boolean {
+    return this.process !== null && this.process.exitCode === null;
+  }
+
+  start(options: ClientOptions): void {
+    if (this.process) {
+      throw new TransportError("ALREADY_STARTED", "Client already started");
+    }
+
+    const args = this.buildArgs(options);
+    const executable = options.executablePath ?? "kimi";
+
+    console.log(`[protocol-client] Spawning CLI: ${executable} ${args.join(" ")}`);
+
+    try {
+      this.process = spawn(executable, args, {
+        cwd: options.workDir,
+        env: { ...process.env, ...options.environmentVariables },
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } catch (err) {
+      throw new TransportError("SPAWN_FAILED", `Failed to spawn CLI: ${err}`, err);
+    }
+
+    if (!this.process.stdout || !this.process.stdin) {
+      this.process.kill();
+      this.process = null;
+      throw new TransportError("SPAWN_FAILED", "Process missing stdio");
+    }
+
+    this.readline = createInterface({ input: this.process.stdout });
+    this.readline.on("line", (line) => this.handleLine(line));
+
+    this.process.stderr?.on("data", (data) => console.warn("[protocol-client stderr]", data.toString()));
+    this.process.on("error", (err) => this.handleProcessError(err));
+    this.process.on("exit", (code) => this.handleProcessExit(code));
+  }
+
+  async stop(): Promise<void> {
+    if (!this.process) {
+      return;
+    }
+
+    if (this.process.exitCode !== null || this.process.killed) {
+      this.cleanup();
+      return;
+    }
+
+    this.process.kill("SIGTERM");
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        this.process?.kill("SIGKILL");
+        resolve();
+      }, 3000);
+      this.process!.once("exit", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+    });
+    this.cleanup();
+  }
+
+  sendPrompt(content: string | ContentPart[]): PromptStream {
+    const { iterable, push, finish } = createEventChannel<StreamEvent>();
+
+    this.pushEvent = push;
+    this.finishEvents = () => {
+      finish();
+      this.pushEvent = null;
+      this.finishEvents = null;
+    };
+
+    const result = this.sendRequest("prompt", { user_input: content })
+      .then((res) => {
+        this.finishEvents?.();
+        const r = res as { status: string; steps?: number };
+        return { status: r.status as RunResult["status"], steps: r.steps };
+      })
+      .catch((err) => {
+        this.finishEvents?.();
+        throw err;
+      });
+
+    return { events: iterable, result };
+  }
+
+  sendCancel(): Promise<void> {
+    return this.sendRequest("cancel").then(() => {});
+  }
+
+  sendApproval(requestId: string, response: ApprovalResponse): Promise<void> {
+    this.writeLine({
+      jsonrpc: "2.0",
+      id: requestId,
+      result: { request_id: requestId, response },
+    });
+    return Promise.resolve();
+  }
+
+  // Private: Args Building
+  private buildArgs(options: ClientOptions): string[] {
+    const args = ["--session", options.sessionId, "--work-dir", options.workDir, "--wire"];
+
+    if (options.model) {
+      args.push("--model", options.model);
+    }
+    if (options.thinking) {
+      args.push("--thinking");
+    } else {
+      args.push("--no-thinking");
+    }
+    if (options.yoloMode) {
+      args.push("--yolo");
+    }
+
+    return [...args];
+  }
+
+  // Private: RPC Communication
+  private sendRequest(method: string, params?: any): Promise<unknown> {
+    const id = `${++this.requestId}_${Date.now()}`;
+
+    return new Promise((resolve, reject) => {
+      this.pendingRequests.set(id, { resolve, reject });
+
+      try {
+        this.writeLine({ jsonrpc: "2.0", id, method, ...(params && { params }) });
+      } catch (err) {
+        this.pendingRequests.delete(id);
+        reject(err);
+      }
+    });
+  }
+
+  private writeLine(data: unknown): void {
+    console.log("[protocol-client] Sending:", JSON.stringify(data));
+
+    if (!this.process?.stdin?.writable) {
+      throw new TransportError("STDIN_NOT_WRITABLE", "Cannot write to CLI stdin");
+    }
+    this.process.stdin.write(JSON.stringify(data) + "\n");
+  }
+
+  // Private: Line Handling
+  private handleLine(line: string): void {
+    console.log("[protocol-client] Received:", line);
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      this.emitParseError("INVALID_JSON", "Failed to parse JSON", line);
+      return;
+    }
+
+    const msg = parsed as { id?: string; method?: string; params?: unknown; result?: unknown; error?: { code: number; message: string } };
+
+    // Response to our request
+    if (msg.id && this.pendingRequests.has(msg.id)) {
+      const pending = this.pendingRequests.get(msg.id)!;
+      this.pendingRequests.delete(msg.id);
+
+      if (msg.error) {
+        pending.reject(CliError.fromRpcError(msg.error.code, msg.error.message));
+      } else {
+        pending.resolve(msg.result);
+      }
+      return;
+    }
+
+    // Notification from Agent
+    if (msg.method) {
+      this.handleNotification(msg.method, msg.params);
+    }
+  }
+
+  private handleNotification(method: string, params: unknown): void {
+    if (method === "event") {
+      const p = params as { type?: string; payload?: unknown } | undefined;
+      if (!p?.type) {
+        this.emitParseError("SCHEMA_MISMATCH", "Event missing type");
+        return;
+      }
+      const result = parseEventPayload(p.type, p.payload);
+      if (result.ok) {
+        this.pushEvent?.(result.value);
+      } else {
+        this.emitParseError("UNKNOWN_EVENT_TYPE", result.error);
+      }
+    } else if (method === "request") {
+      const p = params as { type?: string; payload?: unknown } | undefined;
+      if (!p?.type) {
+        this.emitParseError("SCHEMA_MISMATCH", "Request missing type");
+        return;
+      }
+      const result = parseRequestPayload(p.type, p.payload);
+      if (result.ok) {
+        this.pushEvent?.(result.value);
+      } else {
+        this.emitParseError("UNKNOWN_REQUEST_TYPE", result.error);
+      }
+    }
+  }
+
+  private emitParseError(code: string, message: string, raw?: string): void {
+    const error: ParseError = { type: "error", code, message, raw: raw?.slice(0, 500) };
+    this.pushEvent?.(error);
+  }
+
+  // Private: Process Lifecycle
+  private handleProcessError(err: Error): void {
+    console.error("[protocol-client] Process error:", err.message);
+
+    const error = new TransportError("PROCESS_CRASHED", `CLI process error: ${err.message}`, err);
+    for (const pending of this.pendingRequests.values()) {
+      pending.reject(error);
+    }
+    this.finishEvents?.();
+    this.cleanup();
+  }
+
+  private handleProcessExit(code: number | null): void {
+    console.log("[protocol-client] Process exited with code:", code);
+
+    if (code !== 0 && code !== null) {
+      const error = new TransportError("PROCESS_CRASHED", `CLI exited with code ${code}`);
+      for (const pending of this.pendingRequests.values()) {
+        pending.reject(error);
+      }
+    }
+    this.finishEvents?.();
+    this.cleanup();
+  }
+
+  private cleanup(): void {
+    this.readline?.removeAllListeners();
+    this.readline?.close();
+    this.readline = null;
+
+    this.process?.removeAllListeners();
+    this.process?.stdout?.removeAllListeners();
+    this.process?.stderr?.removeAllListeners();
+    this.process = null;
+
+    this.pushEvent = null;
+    this.finishEvents = null;
+    this.pendingRequests.clear();
+  }
+}

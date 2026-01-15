@@ -1,0 +1,22 @@
+# Source files
+src/**
+webview-ui/src/**
+webview-ui/public/**
+
+# Node modules
+node_modules/**
+webview-ui/node_modules/**
+
+# Build configs
+tsconfig.json
+esbuild.js
+dev.js
+eslint.config.mjs
+webview-ui/tsconfig.json
+webview-ui/vite.config.ts
+webview-ui/components.json
+
+# Other
+.gitignore
+**/*.map
+*.vsix

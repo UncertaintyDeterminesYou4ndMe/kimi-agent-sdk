@@ -1,0 +1,5 @@
+*.lock
+*.lock.yaml
+pnpm-lock.yaml
+yarn.lock
+package-lock.json

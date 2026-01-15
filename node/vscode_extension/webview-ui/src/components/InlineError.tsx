@@ -1,0 +1,30 @@
+import { IconAlertCircle, IconRefresh } from "@tabler/icons-react";
+import { Button } from "@/components/ui/button";
+import { useChatStore } from "@/stores";
+import { cn } from "@/lib/utils";
+import type { InlineError as InlineErrorType } from "shared/types";
+
+interface InlineErrorProps {
+  error: InlineErrorType;
+}
+
+export function InlineError({ error }: InlineErrorProps) {
+  const { retryLastMessage, isStreaming } = useChatStore();
+
+  return (
+    <div className={cn("flex items-center gap-2 px-3 py-2 mt-2 rounded-md", "bg-red-50 dark:bg-red-950/30", "border border-red-200 dark:border-red-900/50")}>
+      <IconAlertCircle className="size-4 text-red-500 shrink-0" />
+      <span className="text-xs text-red-600 dark:text-red-400 flex-1">{error.message}</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 px-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30"
+        onClick={retryLastMessage}
+        disabled={isStreaming}
+      >
+        <IconRefresh className="size-3.5 mr-1" />
+        Retry
+      </Button>
+    </div>
+  );
+}
