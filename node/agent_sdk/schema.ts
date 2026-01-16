@@ -278,6 +278,19 @@ export const ApprovalRequestResolvedSchema = z.object({
 });
 export type ApprovalRequestResolved = z.infer<typeof ApprovalRequestResolvedSchema>;
 
+/** 解析错误 payload */
+export interface ParseErrorPayload {
+  code: string;
+  message: string;
+  rawType?: string;
+}
+
+/** 子 Agent 事件 */
+export interface SubagentEvent {
+  task_tool_call_id: string;
+  event: WireEvent;
+}
+
 // ============================================================================
 // Wire Events & Requests
 // ============================================================================
@@ -298,20 +311,9 @@ export type WireEvent =
   | { type: "ToolCallPart"; payload: ToolCallPart }
   | { type: "ToolResult"; payload: ToolResult }
   | { type: "SubagentEvent"; payload: SubagentEvent }
-  | { type: "ApprovalRequestResolved"; payload: ApprovalRequestResolved };
+  | { type: "ApprovalRequestResolved"; payload: ApprovalRequestResolved }
+  | { type: "ParseError"; payload: ParseErrorPayload };
 
-/** 子 Agent 事件 */
-export interface SubagentEvent {
-  /** 关联的 Task 工具调用 ID */
-  task_tool_call_id: string;
-  /** 子 Agent 产生的事件，嵌套的 Wire 消息格式，可能多层嵌套 */
-  event: WireEvent;
-}
-
-/**
- * Wire 请求联合类型
- * 通过 `request` 方法从 Agent 发送到 Client，必须响应后 Agent 才能继续
- */
 export type WireRequest = { type: "ApprovalRequest"; payload: ApprovalRequestPayload };
 
 /** 事件类型 -> schema 映射 */
@@ -334,27 +336,43 @@ export const RequestSchemas: Record<string, z.ZodSchema> = {
   ApprovalRequest: ApprovalRequestPayloadSchema,
 };
 
+type Result<T> = { ok: true; value: T } | { ok: false; error: string };
+
 /** 解析 Wire 事件（内部使用） */
-function parseWireEvent(raw: { type: string; payload?: unknown }): WireEvent | null {
-  const result = parseEventPayload(raw.type, raw.payload);
-  return result.ok ? result.value : null;
+export function parseEventPayload(type: string, payload: unknown): Result<WireEvent> {
+  const schema = EventSchemas[type];
+  if (!schema) {
+    return { ok: false, error: `Unknown event type: ${type}` };
+  }
+  const result = schema.safeParse(payload);
+  if (!result.success) {
+    return { ok: false, error: `Invalid payload for ${type}: ${result.error.message}` };
+  }
+  return { ok: true, value: { type, payload: result.data } as WireEvent };
 }
 
-/** SubagentEvent schema */
+function parseWireEvent(raw: { type: string; payload?: unknown }): WireEvent {
+  const result = parseEventPayload(raw.type, raw.payload);
+  if (result.ok) {
+    return result.value;
+  }
+  return {
+    type: "ParseError",
+    payload: {
+      code: "SUBAGENT_PARSE_FAILED",
+      message: result.error,
+      rawType: raw.type,
+    },
+  };
+}
+
 export const SubagentEventSchema = z.lazy(() =>
   z.object({
-    /** 关联的 Task 工具调用 ID */
     task_tool_call_id: z.string(),
-    /** 子 Agent 产生的事件 */
-    event: z.object({ type: z.string(), payload: z.unknown() }).transform((raw): WireEvent => {
-      const result = parseWireEvent(raw);
-      if (!result) {
-        return { type: "StepInterrupted", payload: {} };
-      }
-      return result;
-    }),
+    event: z.object({ type: z.string(), payload: z.unknown() }).transform(parseWireEvent),
   }),
-);
+) as z.ZodType<SubagentEvent, z.ZodTypeDef, unknown>;
+
 EventSchemas.SubagentEvent = SubagentEventSchema;
 
 // ============================================================================
@@ -526,25 +544,6 @@ export const ContextRecordSchema = z.object({
   tool_call_id: z.string().optional(),
 });
 export type ContextRecord = z.infer<typeof ContextRecordSchema>;
-
-// ============================================================================
-// Parse Helpers
-// ============================================================================
-
-type Result<T> = { ok: true; value: T } | { ok: false; error: string };
-
-/** 解析事件 payload */
-export function parseEventPayload(type: string, payload: unknown): Result<WireEvent> {
-  const schema = EventSchemas[type];
-  if (!schema) {
-    return { ok: false, error: `Unknown event type: ${type}` };
-  }
-  const result = schema.safeParse(payload);
-  if (!result.success) {
-    return { ok: false, error: `Invalid payload for ${type}: ${result.error.message}` };
-  }
-  return { ok: true, value: { type, payload: result.data } as WireEvent };
-}
 
 /** 解析请求 payload */
 export function parseRequestPayload(type: string, payload: unknown): Result<WireRequest> {

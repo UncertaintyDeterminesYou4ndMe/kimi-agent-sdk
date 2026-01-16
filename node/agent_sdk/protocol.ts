@@ -193,8 +193,7 @@ export class ProtocolClient {
     if (options.yoloMode) {
       args.push("--yolo");
     }
-
-    return [...args];
+    return args;
   }
 
   // Private: RPC Communication

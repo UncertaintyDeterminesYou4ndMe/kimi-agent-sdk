@@ -54,8 +54,8 @@ export interface Session {
 
 class TurnImpl implements Turn {
   readonly result: Promise<RunResult>;
-  private resolveResult!: (result: RunResult) => void;
-  private rejectResult!: (error: Error) => void;
+  private resolveResult: (result: RunResult) => void;
+  private rejectResult: (error: Error) => void;
   private interrupted = false;
 
   constructor(
@@ -65,10 +65,13 @@ class TurnImpl implements Turn {
     private clearPending: () => void,
     private onComplete: () => void,
   ) {
-    const { promise, resolve, reject } = Promise.withResolvers<RunResult>();
-    this.result = promise;
-    promise.catch(() => {});
-
+    let resolve!: (result: RunResult) => void;
+    let reject!: (error: Error) => void;
+    this.result = new Promise<RunResult>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    this.result.catch(() => {});
     this.resolveResult = resolve;
     this.rejectResult = reject;
   }
