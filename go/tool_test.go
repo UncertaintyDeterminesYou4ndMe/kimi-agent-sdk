@@ -427,3 +427,334 @@ func TestCreateTool_ReturnStruct(t *testing.T) {
 		t.Errorf("expected count=5, got %d", res.Count)
 	}
 }
+
+// ============================================================================
+// generateSchema tests - direct JSON schema string comparison
+// ============================================================================
+
+// mustMarshalSchema is a test helper that generates schema and marshals to JSON.
+func mustMarshalSchema(t *testing.T, typ reflect.Type, fieldDescs map[string]string) string {
+	t.Helper()
+	schema, err := generateSchema(typ, fieldDescs)
+	if err != nil {
+		t.Fatalf("generateSchema failed: %v", err)
+	}
+	got, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	return string(got)
+}
+
+func TestGenerateSchema_PrimitiveTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		typ      reflect.Type
+		expected string
+	}{
+		{"bool", reflect.TypeFor[bool](), `{"type":"boolean"}`},
+		{"int", reflect.TypeFor[int](), `{"type":"integer"}`},
+		{"int8", reflect.TypeFor[int8](), `{"type":"integer"}`},
+		{"int16", reflect.TypeFor[int16](), `{"type":"integer"}`},
+		{"int32", reflect.TypeFor[int32](), `{"type":"integer"}`},
+		{"int64", reflect.TypeFor[int64](), `{"type":"integer"}`},
+		{"uint", reflect.TypeFor[uint](), `{"type":"integer"}`},
+		{"uint8", reflect.TypeFor[uint8](), `{"type":"integer"}`},
+		{"uint16", reflect.TypeFor[uint16](), `{"type":"integer"}`},
+		{"uint32", reflect.TypeFor[uint32](), `{"type":"integer"}`},
+		{"uint64", reflect.TypeFor[uint64](), `{"type":"integer"}`},
+		{"float32", reflect.TypeFor[float32](), `{"type":"number"}`},
+		{"float64", reflect.TypeFor[float64](), `{"type":"number"}`},
+		{"string", reflect.TypeFor[string](), `{"type":"string"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mustMarshalSchema(t, tt.typ, nil)
+			if got != tt.expected {
+				t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGenerateSchema_EmptyStruct(t *testing.T) {
+	type EmptyStruct struct{}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[EmptyStruct](), nil)
+	expected := `{"type":"object"}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_UnexportedFields(t *testing.T) {
+	type StructWithUnexported struct {
+		Public  string `json:"public"`
+		private string //nolint:unused
+	}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[StructWithUnexported](), nil)
+	expected := `{"type":"object","properties":{"public":{"type":"string"}},"required":["public"]}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_JsonIgnoreTag(t *testing.T) {
+	type StructWithIgnored struct {
+		Visible string `json:"visible"`
+		Ignored string `json:"-"`
+	}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[StructWithIgnored](), nil)
+	expected := `{"type":"object","properties":{"visible":{"type":"string"}},"required":["visible"]}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_OmitemptyTag(t *testing.T) {
+	type StructWithOmitempty struct {
+		Required string `json:"required"`
+		Optional string `json:"optional,omitempty"`
+	}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[StructWithOmitempty](), nil)
+	expected := `{"type":"object","properties":{"optional":{"type":"string"},"required":{"type":"string"}},"required":["required"]}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_OmitzeroTag(t *testing.T) {
+	type StructWithOmitzero struct {
+		Required string `json:"required"`
+		Optional string `json:"optional,omitzero"`
+	}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[StructWithOmitzero](), nil)
+	expected := `{"type":"object","properties":{"optional":{"type":"string"},"required":{"type":"string"}},"required":["required"]}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_EmptyJsonName(t *testing.T) {
+	type StructWithEmptyJsonName struct {
+		FieldName string `json:""`
+	}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[StructWithEmptyJsonName](), nil)
+	expected := `{"type":"object","properties":{"FieldName":{"type":"string"}},"required":["FieldName"]}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_DescriptionTag(t *testing.T) {
+	type StructWithDescription struct {
+		Field string `json:"field" description:"A field description"`
+	}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[StructWithDescription](), nil)
+	expected := `{"type":"object","properties":{"field":{"type":"string","description":"A field description"}},"required":["field"]}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_Slice(t *testing.T) {
+	got := mustMarshalSchema(t, reflect.TypeFor[[]string](), nil)
+	expected := `{"type":"array","items":{"type":"string"}}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_Array(t *testing.T) {
+	got := mustMarshalSchema(t, reflect.TypeFor[[3]int](), nil)
+	expected := `{"type":"array","items":{"type":"integer"}}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_Pointer(t *testing.T) {
+	got := mustMarshalSchema(t, reflect.TypeFor[*string](), nil)
+	expected := `{"type":"string"}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_PointerAlwaysOptional(t *testing.T) {
+	type StructWithPointer struct {
+		Required string  `json:"required"`
+		Optional *string `json:"optional"`
+	}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[StructWithPointer](), nil)
+	expected := `{"type":"object","properties":{"optional":{"type":"string"},"required":{"type":"string"}},"required":["required"]}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_MapStringKey(t *testing.T) {
+	got := mustMarshalSchema(t, reflect.TypeFor[map[string]int](), nil)
+	expected := `{"type":"object"}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_MapNonStringKey(t *testing.T) {
+	_, err := generateSchema(reflect.TypeFor[map[int]string](), nil)
+	if err == nil {
+		t.Error("expected error for map with non-string key, got nil")
+	}
+}
+
+func TestGenerateSchema_NestedStruct(t *testing.T) {
+	type Inner struct {
+		Value string `json:"value"`
+	}
+	type Outer struct {
+		Inner Inner `json:"inner"`
+	}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[Outer](), nil)
+	expected := `{"type":"object","properties":{"inner":{"type":"object","properties":{"value":{"type":"string"}},"required":["value"]}},"required":["inner"]}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_DeepNested(t *testing.T) {
+	type Level3 struct {
+		Data string `json:"data"`
+	}
+	type Level2 struct {
+		Level3 Level3 `json:"level3"`
+	}
+	type Level1 struct {
+		Level2 Level2 `json:"level2"`
+	}
+	type Root struct {
+		Level1 Level1 `json:"level1"`
+	}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[Root](), nil)
+	expected := `{"type":"object","properties":{"level1":{"type":"object","properties":{"level2":{"type":"object","properties":{"level3":{"type":"object","properties":{"data":{"type":"string"}},"required":["data"]}},"required":["level3"]}},"required":["level2"]}},"required":["level1"]}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_SliceOfStructs(t *testing.T) {
+	type Item struct {
+		Name string `json:"name"`
+	}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[[]Item](), nil)
+	expected := `{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_UnsupportedTypes(t *testing.T) {
+	tests := []struct {
+		name string
+		typ  reflect.Type
+	}{
+		{"interface", reflect.TypeFor[any]()},
+		{"func", reflect.TypeFor[func()]()},
+		{"chan", reflect.TypeFor[chan int]()},
+		{"complex64", reflect.TypeFor[complex64]()},
+		{"complex128", reflect.TypeFor[complex128]()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := generateSchema(tt.typ, nil)
+			if err == nil {
+				t.Errorf("expected error for unsupported type %s, got nil", tt.name)
+			}
+		})
+	}
+}
+
+func TestGenerateSchema_FieldDescsOverride(t *testing.T) {
+	type StructWithDesc struct {
+		Field string `json:"field" description:"original"`
+	}
+
+	fieldDescs := map[string]string{
+		"Field": "overridden",
+	}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[StructWithDesc](), fieldDescs)
+	expected := `{"type":"object","properties":{"field":{"type":"string","description":"overridden"}},"required":["field"]}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_FieldDescsNotPassedToNested(t *testing.T) {
+	type Inner struct {
+		Value string `json:"value" description:"inner desc"`
+	}
+	type Outer struct {
+		Inner Inner `json:"inner"`
+	}
+
+	fieldDescs := map[string]string{
+		"Value": "should not apply to nested",
+	}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[Outer](), fieldDescs)
+	// Inner.Value should keep "inner desc" since fieldDescs is not passed to nested
+	expected := `{"type":"object","properties":{"inner":{"type":"object","properties":{"value":{"type":"string","description":"inner desc"}},"required":["value"]}},"required":["inner"]}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
+
+func TestGenerateSchema_ComplexStruct(t *testing.T) {
+	type Address struct {
+		City string `json:"city"`
+	}
+	type Person struct {
+		Name     string         `json:"name" description:"Person's name"`
+		Age      int            `json:"age,omitempty"`
+		Tags     []string       `json:"tags,omitempty"`
+		Address  *Address       `json:"address,omitempty"`
+		Metadata map[string]any `json:"-"`
+	}
+
+	got := mustMarshalSchema(t, reflect.TypeFor[Person](), nil)
+	expected := `{"type":"object","properties":{"address":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]},"age":{"type":"integer"},"name":{"type":"string","description":"Person's name"},"tags":{"type":"array","items":{"type":"string"}}},"required":["name"]}`
+
+	if got != expected {
+		t.Errorf("schema mismatch:\ngot:  %s\nwant: %s", got, expected)
+	}
+}
