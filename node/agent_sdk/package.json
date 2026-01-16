@@ -3,28 +3,33 @@
   "version": "0.1.0",
   "description": "SDK for interacting with Kimi Code CLI",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MoonshotAI/kimi-agent-sdk.git",
+    "directory": "node/agent_sdk"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
+      "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
     "./schema": {
       "types": "./dist/schema.d.ts",
-      "import": "./dist/schema.js",
+      "import": "./dist/schema.mjs",
       "require": "./dist/schema.cjs"
     },
     "./errors": {
       "types": "./dist/errors.d.ts",
-      "import": "./dist/errors.js",
+      "import": "./dist/errors.mjs",
       "require": "./dist/errors.cjs"
     },
     "./utils": {
       "types": "./dist/utils.d.ts",
-      "import": "./dist/utils.js",
+      "import": "./dist/utils.mjs",
       "require": "./dist/utils.cjs"
     }
   },
