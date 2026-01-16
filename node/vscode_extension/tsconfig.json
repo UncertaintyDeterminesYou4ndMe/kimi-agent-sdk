@@ -12,7 +12,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "shared/*": ["./shared/*"]
+      "shared/*": ["./shared/*"],
+      "@moonshot-ai/kimi-agent-sdk": ["../agent_sdk/index.ts"],
+      "@moonshot-ai/kimi-agent-sdk/*": ["../agent_sdk/*"]
     }
   },
   "include": ["src/**/*", "../agent_sdk/**/*"],

@@ -1,4 +1,4 @@
-import type { RunResult, StreamEvent, ContentPart } from "../../agent_sdk";
+import type { RunResult, StreamEvent, ContentPart } from "@moonshot-ai/kimi-agent-sdk";
 
 export interface SessionConfig {
   model: string;

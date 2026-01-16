@@ -5,6 +5,7 @@
   "private": true,
   "workspaces": [
     "vscode_extension",
+    "vscode_extension/shared",
     "agent_sdk"
   ],
   "scripts": {

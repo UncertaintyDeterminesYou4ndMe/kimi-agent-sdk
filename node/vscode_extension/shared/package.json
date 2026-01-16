@@ -1,0 +1,13 @@
+{
+  "name": "@moonshot-ai/vscode-extension-shared",
+  "private": true,
+  "version": "0.0.0",
+  "main": "./index.ts",
+  "dependencies": {
+    "@moonshot-ai/kimi-agent-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.x",
+    "typescript": "^5.9.3"
+  }
+}

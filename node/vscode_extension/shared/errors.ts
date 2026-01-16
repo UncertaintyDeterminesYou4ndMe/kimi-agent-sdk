@@ -1,4 +1,4 @@
-import { CliErrorCodes, SessionErrorCodes, TransportErrorCodes } from "../../agent_sdk/errors";
+import { CliErrorCodes, SessionErrorCodes, TransportErrorCodes } from "@moonshot-ai/kimi-agent-sdk/errors";
 import type { ErrorPhase } from "./types";
 
 // Pre-flight: task didn't start at all or was blocked by "gatekeeper"

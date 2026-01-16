@@ -62,7 +62,7 @@ function createFailingPromptStream(error: Error) {
   const resultPromise = new Promise<RunResult>((_, reject) => {
     rejectFn = reject;
   });
-  resultPromise.catch(() => { });
+  resultPromise.catch(() => {});
 
   return {
     events: (async function* () {
