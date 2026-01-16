@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface, type Interface as ReadlineInterface } from "node:readline";
-import { RpcMessageSchema, parseEventPayload, parseRequestPayload, type StreamEvent, type RunResult, type ContentPart, type ApprovalResponse, type ParseError } from "./schema";
-import { TransportError, ProtocolError, CliError } from "./errors";
+import { parseEventPayload, parseRequestPayload, type StreamEvent, type RunResult, type ContentPart, type ApprovalResponse, type ParseError } from "./schema";
+import { TransportError, CliError } from "./errors";
 
 // Client Options
 export interface ClientOptions {

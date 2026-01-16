@@ -209,10 +209,11 @@
     "vscode:prepublish": "pnpm run build",
     "dev": "node dev.js",
     "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
     "build": "pnpm run build:webview && pnpm run build:extension",
     "build:webview": "pnpm --filter @moonshot-ai/vscode_extension-webview-ui build",
-    "build:extension": "node esbuild.js --production",
-    "package": "node esbuild.js --production && vsce package --no-dependencies"
+    "build:extension": "tsc --noEmit && node esbuild.js --production",
+    "package": "tsc --noEmit && node esbuild.js --production && vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/node": "22.x",

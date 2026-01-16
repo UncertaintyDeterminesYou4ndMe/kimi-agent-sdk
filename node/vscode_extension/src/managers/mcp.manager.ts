@@ -176,7 +176,7 @@ export const MCPManager = {
       async () => {
         const result = await testMCP(name, executable);
         if (result.success) {
-          vscode.window.showInformationMessage(`Kimi: "${name}" connected successfully (${result.tools.length} tools available)`);
+          vscode.window.showInformationMessage(`Kimi: "${name}" connected successfully (${result.tools?.length ?? 0} tools available)`);
         } else {
           vscode.window.showErrorMessage(`Kimi: "${name}" connection failed: ${result.error}`);
         }

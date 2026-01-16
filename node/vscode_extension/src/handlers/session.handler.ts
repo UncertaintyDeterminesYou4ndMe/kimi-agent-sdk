@@ -32,6 +32,6 @@ export const sessionHandlers: Record<string, Handler<any, any>> = {
     if (!ctx.workDir) {
       return { ok: false };
     }
-    return { ok: deleteSession(ctx.workDir, params.sessionId) };
+    return { ok: await deleteSession(ctx.workDir, params.sessionId) };
   },
 };

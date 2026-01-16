@@ -18,5 +18,5 @@
     }
   },
   "include": ["src/**/*", "../agent_sdk/**/*"],
-  "exclude": ["out", "dist", "node_modules", "webview-ui"]
+  "exclude": ["out", "dist", "node_modules", "webview-ui", "../agent_sdk/*.config.ts", "../agent_sdk/**/*.test.ts", "../agent_sdk/**/*.spec.ts"]
 }
