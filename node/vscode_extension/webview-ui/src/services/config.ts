@@ -13,6 +13,7 @@ export const VIDEO_CONFIG = {
 
 export const MEDIA_CONFIG = {
   maxCount: 9,
+  maxTotalBytes: 80 * 1024 * 1024,
 } as const;
 
 export const FILE_PICKER_CONFIG = {

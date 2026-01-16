@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from "react";
 import { toast } from "@/components/ui/sonner";
 import { bridge } from "@/services";
-import { MEDIA_CONFIG, validateMediaFile, processMediaFile, getMediaType } from "@/lib/media-utils";
+import { MEDIA_CONFIG, validateMediaFile, validateTotalSize, processMediaFile, getMediaType } from "@/lib/media-utils";
 import { useChatStore } from "@/stores";
 
 interface UseMediaUploadResult {
@@ -17,6 +17,10 @@ export function useMediaUpload(): UseMediaUploadResult {
   const hasProcessing = draftMedia.some((m) => !m.dataUri);
   const canAddMedia = !isStreaming && draftMedia.length < MEDIA_CONFIG.maxCount;
 
+  const getExistingDataUris = useCallback((): string[] => {
+    return draftMedia.filter((m) => m.dataUri).map((m) => m.dataUri!);
+  }, [draftMedia]);
+
   const processFile = useCallback(
     async (file: File) => {
       const error = validateMediaFile(file, draftMedia.length);
@@ -30,13 +34,19 @@ export function useMediaUpload(): UseMediaUploadResult {
 
       try {
         const dataUri = await processMediaFile(file);
+        const totalError = validateTotalSize(getExistingDataUris(), dataUri);
+        if (totalError) {
+          removeDraftMedia(id);
+          toast.error(totalError.message);
+          return;
+        }
         updateDraftMedia(id, dataUri);
       } catch {
         removeDraftMedia(id);
         toast.error("Failed to process media file");
       }
     },
-    [draftMedia.length, addDraftMedia, updateDraftMedia, removeDraftMedia],
+    [draftMedia.length, addDraftMedia, updateDraftMedia, removeDraftMedia, getExistingDataUris],
   );
 
   const addMediaFiles = useCallback(
@@ -79,13 +89,21 @@ export function useMediaUpload(): UseMediaUploadResult {
     const remaining = MEDIA_CONFIG.maxCount - draftMedia.length;
     try {
       const media = await bridge.pickMedia(remaining, true);
+      const existingUris = getExistingDataUris();
+
       for (const dataUri of media) {
+        const totalError = validateTotalSize(existingUris, dataUri);
+        if (totalError) {
+          toast.error(totalError.message);
+          break;
+        }
+        existingUris.push(dataUri);
         addDraftMedia(crypto.randomUUID(), dataUri);
       }
     } catch {
       toast.error("Failed to pick media");
     }
-  }, [isStreaming, hasProcessing, draftMedia.length, addDraftMedia]);
+  }, [isStreaming, hasProcessing, draftMedia.length, addDraftMedia, getExistingDataUris]);
 
   useEffect(() => {
     const isMediaFile = (file: File) => getMediaType(file) !== null;

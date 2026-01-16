@@ -6,7 +6,7 @@ export { IMAGE_CONFIG, VIDEO_CONFIG, MEDIA_CONFIG };
 export type MediaType = "image" | "video";
 
 export interface MediaValidationError {
-  type: "format" | "size" | "count";
+  type: "format" | "size" | "count" | "total_size";
   message: string;
 }
 
@@ -48,7 +48,14 @@ export function getMediaTypeFromDataUri(dataUri: string): MediaType | null {
   return null;
 }
 
-// ============ Validation ============
+export function getDataUriByteSize(dataUri: string): number {
+  const commaIndex = dataUri.indexOf(",");
+  if (commaIndex === -1) {
+    return 0;
+  }
+  const base64 = dataUri.slice(commaIndex + 1);
+  return Math.ceil((base64.length * 3) / 4);
+}
 
 export function validateMediaFile(file: File, currentCount: number): MediaValidationError | null {
   if (currentCount >= MEDIA_CONFIG.maxCount) {
@@ -69,6 +76,16 @@ export function validateMediaFile(file: File, currentCount: number): MediaValida
 }
 
 // ============ Processing Helpers ============
+export function validateTotalSize(existingDataUris: string[], newDataUri: string): MediaValidationError | null {
+  const existingSize = existingDataUris.reduce((sum, uri) => sum + getDataUriByteSize(uri), 0);
+  const newSize = getDataUriByteSize(newDataUri);
+  const totalSize = existingSize + newSize;
+  if (totalSize > MEDIA_CONFIG.maxTotalBytes) {
+    const maxMB = MEDIA_CONFIG.maxTotalBytes / (1024 * 1024);
+    return { type: "total_size", message: `Total media size exceeds ${maxMB}MB limit` };
+  }
+  return null;
+}
 
 function blobToDataUri(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
