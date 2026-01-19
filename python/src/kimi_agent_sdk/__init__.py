@@ -36,7 +36,13 @@ from kimi_cli.wire.types import (
     is_event,
     is_request,
 )
-from kosong.chat_provider import ChatProviderError
+from kosong.chat_provider import (
+    APIConnectionError,
+    APIEmptyResponseError,
+    APIStatusError,
+    APITimeoutError,
+    ChatProviderError,
+)
 from kosong.message import (
     AudioURLPart,
     ContentPart,
@@ -49,6 +55,7 @@ from kosong.message import (
 )
 
 from kimi_agent_sdk._approval import ApprovalHandlerFn
+from kimi_agent_sdk._exception import PromptValidationError, SessionStateError
 from kimi_agent_sdk._prompt import prompt
 from kimi_agent_sdk._session import Session
 
@@ -101,8 +108,14 @@ __all__ = [
     "LLMNotSet",
     "LLMNotSupported",
     "ChatProviderError",
+    "APIConnectionError",
+    "APITimeoutError",
+    "APIStatusError",
+    "APIEmptyResponseError",
     "MaxStepsReached",
     "RunCancelled",
+    "PromptValidationError",
+    "SessionStateError",
     # Others
     "Config",
     "MCPConfig",
