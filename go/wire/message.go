@@ -77,7 +77,9 @@ func (ToolCallPart) message()            {}
 func (ToolResult) message()              {}
 func (SubagentEvent) message()           {}
 func (ApprovalRequestResolved) message() {}
+func (ApprovalResponse) message()        {}
 func (ApprovalRequest) message()         {}
+func (ToolCallRequest) message()         {}
 
 type Event interface {
 	Message
@@ -99,6 +101,7 @@ const (
 	EventTypeToolResult              EventType = "ToolResult"
 	EventTypeSubagentEvent           EventType = "SubagentEvent"
 	EventTypeApprovalRequestResolved EventType = "ApprovalRequestResolved"
+	EventTypeApprovalResponse        EventType = "ApprovalResponse"
 )
 
 func (TurnBegin) EventType() EventType               { return EventTypeTurnBegin }
@@ -113,6 +116,7 @@ func (ToolCallPart) EventType() EventType            { return EventTypeToolCallP
 func (ToolResult) EventType() EventType              { return EventTypeToolResult }
 func (SubagentEvent) EventType() EventType           { return EventTypeSubagentEvent }
 func (ApprovalRequestResolved) EventType() EventType { return EventTypeApprovalRequestResolved }
+func (ApprovalResponse) EventType() EventType        { return EventTypeApprovalResponse }
 
 func unmarshalEvent[E Event](data []byte) (Event, error) {
 	var event E
@@ -135,6 +139,7 @@ var eventUnmarshaler = map[EventType]func(data []byte) (Event, error){
 	EventTypeToolResult:              unmarshalEvent[ToolResult],
 	EventTypeSubagentEvent:           unmarshalEvent[SubagentEvent],
 	EventTypeApprovalRequestResolved: unmarshalEvent[ApprovalRequestResolved],
+	EventTypeApprovalResponse:        unmarshalEvent[ApprovalResponse],
 }
 
 func (params *EventParams) UnmarshalJSON(data []byte) (err error) {
@@ -177,11 +182,11 @@ type RequestType string
 
 const (
 	RequestTypeApprovalRequest RequestType = "ApprovalRequest"
-	RequestTypeToolCall        RequestType = "ToolCall"
+	RequestTypeToolCallRequest RequestType = "ToolCallRequest"
 )
 
 func (r ApprovalRequest) RequestType() RequestType { return RequestTypeApprovalRequest }
-func (r ToolCall) RequestType() RequestType        { return RequestTypeToolCall }
+func (r ToolCallRequest) RequestType() RequestType { return RequestTypeToolCallRequest }
 
 func (ApprovalRequestResponse) requestResponse() {}
 
@@ -195,7 +200,7 @@ func unmarshalRequest[R Request](data []byte) (Request, error) {
 
 var requestUnmarshaler = map[RequestType]func(data []byte) (Request, error){
 	RequestTypeApprovalRequest: unmarshalRequest[ApprovalRequest],
-	RequestTypeToolCall:        unmarshalRequest[ToolCall],
+	RequestTypeToolCallRequest: unmarshalRequest[ToolCallRequest],
 }
 
 func (params *RequestParams) UnmarshalJSON(data []byte) (err error) {
@@ -370,11 +375,10 @@ const (
 )
 
 type ToolCall struct {
-	Responder `json:"-"`
-	Type      ToolCallType             `json:"type"`
-	ID        string                   `json:"id"`
-	Function  ToolCallFunction         `json:"function"`
-	Extras    Optional[map[string]any] `json:"extras,omitzero"`
+	Type     ToolCallType             `json:"type"`
+	ID       string                   `json:"id"`
+	Function ToolCallFunction         `json:"function"`
+	Extras   Optional[map[string]any] `json:"extras,omitzero"`
 }
 
 type ToolCallFunction struct {
@@ -394,8 +398,8 @@ type ToolResult struct {
 type ToolResultReturnValue struct {
 	IsError bool                     `json:"is_error"`
 	Output  Content                  `json:"output"`
-	Message string                   `json:"message,omitzero"`
-	Display []DisplayBlock           `json:"display,omitzero"`
+	Message string                   `json:"message"`
+	Display []DisplayBlock           `json:"display"`
 	Extras  Optional[map[string]any] `json:"extras,omitzero"`
 }
 
@@ -404,6 +408,8 @@ type SubagentEvent struct {
 	Event          EventParams `json:"event"`
 }
 
+// Deprecated: Renamed to ApprovalResponse in Wire 1.1.
+// The old name is still accepted for backwards compatibility.
 type ApprovalRequestResolved struct {
 	RequestID string                  `json:"request_id"`
 	Response  ApprovalRequestResponse `json:"response"`
@@ -431,6 +437,13 @@ const (
 type ApprovalResponse struct {
 	RequestID string                  `json:"request_id"`
 	Response  ApprovalRequestResponse `json:"response"`
+}
+
+type ToolCallRequest struct {
+	Responder `json:"-"`
+	ID        string           `json:"id"`
+	Name      string           `json:"name"`
+	Arguments Optional[string] `json:"arguments,omitzero"`
 }
 
 type DisplayBlockType string

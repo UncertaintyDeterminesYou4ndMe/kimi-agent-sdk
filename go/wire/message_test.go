@@ -15,11 +15,12 @@ var (
 	_ Message = CompactionEnd{}
 	_ Message = StatusUpdate{}
 	_ Message = ContentPart{}
-	_ Message = ToolCall{}
+	_ Message = ToolCallRequest{}
 	_ Message = ToolCallPart{}
 	_ Message = ToolResult{}
 	_ Message = SubagentEvent{}
 	_ Message = ApprovalRequestResolved{}
+	_ Message = ApprovalResponse{}
 	_ Message = ApprovalRequest{}
 
 	_ Event = TurnBegin{}
@@ -34,9 +35,10 @@ var (
 	_ Event = ToolResult{}
 	_ Event = SubagentEvent{}
 	_ Event = ApprovalRequestResolved{}
+	_ Event = ApprovalResponse{}
 
 	_ Request = ApprovalRequest{}
-	_ Request = ToolCall{}
+	_ Request = ToolCallRequest{}
 )
 
 func TestEvent_EventTypeConstants(t *testing.T) {
@@ -57,6 +59,7 @@ func TestEvent_EventTypeConstants(t *testing.T) {
 		{"ToolResult", ToolResult{}, EventTypeToolResult},
 		{"SubagentEvent", SubagentEvent{}, EventTypeSubagentEvent},
 		{"ApprovalRequestResolved", ApprovalRequestResolved{}, EventTypeApprovalRequestResolved},
+		{"ApprovalResponse", ApprovalResponse{}, EventTypeApprovalResponse},
 	}
 
 	for _, tc := range cases {
@@ -241,6 +244,7 @@ func TestEventParams_UnmarshalJSON_AllEventTypes(t *testing.T) {
 		{"ToolResult", EventTypeToolResult, ToolResult{ToolCallID: "1", ReturnValue: ToolResultReturnValue{IsError: false, Output: NewStringContent("ok"), Message: "m"}}},
 		{"SubagentEvent", EventTypeSubagentEvent, sub},
 		{"ApprovalRequestResolved", EventTypeApprovalRequestResolved, ApprovalRequestResolved{RequestID: "rid", Response: ApprovalRequestResponseApprove}},
+		{"ApprovalResponse", EventTypeApprovalResponse, ApprovalResponse{RequestID: "rid", Response: ApprovalRequestResponseApprove}},
 	}
 
 	for _, tc := range cases {
