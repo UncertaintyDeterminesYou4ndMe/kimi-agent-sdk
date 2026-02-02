@@ -5,7 +5,54 @@ export interface WelcomeHint {
   title: string;
   description: string;
   slashCommand?: string;
+  component?: React.ReactNode;
 }
+
+function ShortcutRow({ kbd, children }: { kbd: string; children: React.ReactNode }) {
+  return (
+    <div className="flex justify-between items-start gap-3">
+      <kbd className="kbd shrink-0">{kbd}</kbd>
+      <span className="text-right">{children}</span>
+    </div>
+  );
+}
+
+function ShortcutGuide() {
+  return (
+    <div className="text-left text-xs mt-2 space-y-5 w-full max-w-96">
+      <div>
+        <div className="font-medium text-foreground mb-1.5">⚡ Commands</div>
+        <div className="text-muted-foreground space-y-1">
+          <ShortcutRow kbd="/">View all commands</ShortcutRow>
+          <ShortcutRow kbd="/init">Scan project and generate AGENT.md file</ShortcutRow>
+          <ShortcutRow kbd="/compact">Trim context so that I focus on the essentials</ShortcutRow>
+        </div>
+      </div>
+      <div>
+        <div className="font-medium text-foreground mb-1.5">💡 Tips</div>
+        <div className="text-muted-foreground space-y-1">
+          <ShortcutRow kbd="↑">Browse input history</ShortcutRow>
+          <ShortcutRow kbd="@">Add/Search files to reference</ShortcutRow>
+          <ShortcutRow kbd="Alt+K">Add selected code directly from editor</ShortcutRow>
+        </div>
+      </div>
+      <div>
+        <div className="font-medium text-foreground mb-1.5">🚀 Pro Tips</div>
+        <div className="text-muted-foreground space-y-1">
+          <div>• Use YOLO mode to auto-approve tool calls</div>
+          <div>• Paste images directly to describe your needs</div>
+          <div>• Enable Thinking for complex tasks</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const HINT_FIRST_TIME: WelcomeHint = {
+  title: "Quick Start Guide",
+  description: "",
+  component: <ShortcutGuide />,
+};
 
 const HINT_AGENT_MD: WelcomeHint = {
   title: "Let me map your codebase",
@@ -13,12 +60,9 @@ const HINT_AGENT_MD: WelcomeHint = {
   slashCommand: "/init",
 };
 
-const HINT_FIRST_TIME: WelcomeHint = {
-  title: "Not sure where to begin?",
-  description: 'Try asking: "What does this project do?"',
-};
-
 const HINTS_POOL: WelcomeHint[] = [
+  HINT_FIRST_TIME,
+  HINT_AGENT_MD,
   {
     title: "Reference specific code",
     description: "Type @ to select files, or press Alt+K with code highlighted",
@@ -74,13 +118,13 @@ export function useWelcomeHint(): WelcomeHint {
   }, []);
 
   return useMemo(() => {
+    // First time user: show shortcut guide
+    if (hasHistory === false) {
+      return HINT_FIRST_TIME;
+    }
     // 30% chance to show AGENT.md hint if missing
     if (hasAgentMd === false && withProbability(0.3)) {
       return HINT_AGENT_MD;
-    }
-    // 20% chance to show first-time hint if no history
-    if (hasHistory === false && withProbability(0.2)) {
-      return HINT_FIRST_TIME;
     }
     return pickRandom(HINTS_POOL);
   }, [hasAgentMd, hasHistory]);
