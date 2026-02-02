@@ -20,6 +20,7 @@ func turnBegin(
 	tp transport.Transport,
 	errorPointer *atomic.Pointer[error],
 	resultPointer *atomic.Pointer[wire.PromptResult],
+	wireProtocolVersion string,
 	wireMessageChan <-chan wire.Message,
 	wireRequestResponseChan chan<- wire.RequestResponse,
 	exit func(error) error,
@@ -37,6 +38,7 @@ func turnBegin(
 		stop:                    stop,
 		cancel:                  cancel,
 		exit:                    exit,
+		wireProtocolVersion:     wireProtocolVersion,
 		wireRequestResponseChan: wireRequestResponseChan,
 		Steps:                   steps,
 	}
@@ -60,6 +62,7 @@ type Turn struct {
 	Steps <-chan *Step
 	usage atomic.Pointer[Usage]
 
+	wireProtocolVersion     string
 	wireRequestResponseChan chan<- wire.RequestResponse
 }
 
@@ -74,13 +77,19 @@ func (t *Turn) watch(parent context.Context) {
 }
 
 func (t *Turn) traverse(incoming <-chan wire.Message, steps chan<- *Step) {
-	defer t.Cancel()
-	defer close(t.wireRequestResponseChan)
 	defer close(steps)
-	var outgoing chan wire.Message
+	defer close(t.wireRequestResponseChan)
+	defer t.Cancel()
+	var (
+		outgoing chan wire.Message
+		turnEnd  bool
+	)
 	defer func() {
 		if outgoing != nil {
 			close(outgoing)
+		}
+		if t.wireProtocolVersion >= "1.2" && !turnEnd {
+			t.resultPointer.Store(&wire.PromptResult{Status: wire.PromptResultStatusUnexpectedEOF})
 		}
 	}()
 	select {
@@ -97,6 +106,9 @@ func (t *Turn) traverse(incoming <-chan wire.Message, steps chan<- *Step) {
 	}
 	for msg := range incoming {
 		switch x := msg.(type) {
+		case wire.TurnEnd:
+			turnEnd = true
+			return
 		case wire.Request:
 			if outgoing != nil {
 				select {
