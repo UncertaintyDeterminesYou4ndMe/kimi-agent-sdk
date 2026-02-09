@@ -386,7 +386,9 @@ export type WireEvent =
   | { type: "ApprovalResponse"; payload: ApprovalResponseEvent }
   | { type: "ParseError"; payload: ParseErrorPayload };
 
-export type WireRequest = { type: "ApprovalRequest"; payload: ApprovalRequestPayload } | { type: "ToolCallRequest"; payload: ToolCallRequest };
+export type WireRequest =
+  | { type: "ApprovalRequest"; payload: ApprovalRequestPayload }
+  | { type: "ToolCallRequest"; payload: ToolCallRequest };
 
 // Event type -> schema mapping
 export const EventSchemas: Record<string, z.ZodSchema> = {

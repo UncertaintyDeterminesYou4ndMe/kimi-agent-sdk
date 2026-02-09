@@ -3,7 +3,7 @@
   "publisher": "moonshot-ai",
   "displayName": "Kimi Code (Technical Preview)",
   "description": "Official Kimi Code plugin for VS Code",
-  "version": "0.3.4",
+  "version": "0.3.6",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -250,6 +250,7 @@
     "typescript-eslint": "^8.48.1"
   },
   "dependencies": {
-    "debug": "^4.4.3"
+    "debug": "^4.4.3",
+    "zod": "^3.25.76"
   }
 }
